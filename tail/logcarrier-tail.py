@@ -153,7 +153,7 @@ def do_tail():
             for a in ['host','port','key','protocol','sync_log_rotate','from_begin','from_begin_maxsize','dirname_prefix']:
               files[filename][a] = conf[a]
             if group in conf['group_defs']:
-              for a in ['host','port','key','protocol','dirname','subdirname','dirname_prefix','aggregate','file_prefix','file_suffix','filename_match','filename_fmt','dirname_fmt','sync_log_rotate','skip_line_regexp','only_line_regexp']:
+              for a in ['host','port','key','protocol','dirname','subdirname','dirname_prefix','aggregate','file_prefix','file_suffix','filename_match','filename_fmt','dirname_fmt','sync_log_rotate','skip_line_regexp','only_line_regexp','max_mtime_age']:
                 if a in conf['group_defs'][group]:
                   files[filename][a] = conf['group_defs'][group][a]
             if '///' in filemask:
@@ -393,6 +393,10 @@ def do_tail():
                   elif files[filename]['pos'] > fstat.st_size:
                     logger.debug("File %s size lower than position (truncated)" % filename)
                     files[filename]['rotated'] = time.time()
+                if 'max_mtime_age' in files[filename] and files[filename]['max_mtime_age']:
+                  if int(fstat.st_mtime) + files[filename]['max_mtime_age'] < time.time():
+                    close_file(filename)
+                    logger.info('Close file due max_mtime_age: %s' % filename)
               if 'rotated' in files[filename]:
                 if conf['rotated_timeout_max'] and files[filename]['rotated'] + conf['rotated_timeout_max'] < time.time():
                   logger.error("File %s rotated_timeout exceeded (%s)" % (filename, conf['rotated_timeout_max']))
@@ -422,6 +426,9 @@ def do_tail():
             if not 'ino' in files[filename]:
               files[filename]['ino'] = fstat.st_ino
             if not files[filename]['fd']:
+              if 'max_mtime_age' in files[filename] and files[filename]['max_mtime_age']:
+                if int(fstat.st_mtime) + files[filename]['max_mtime_age'] < time.time():
+                  continue
               logger.info('Opening file: %s' % filename)
               files[filename]['fd'] = open(filename, 'r')
               if filename in poss and poss[filename] <= fstat.st_size:
