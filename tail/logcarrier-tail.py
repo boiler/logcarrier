@@ -37,7 +37,7 @@ conf = {
   'from_begin_maxsize': 10000000,
   'sync_log_rotate': False,
   'dirname_prefix': '',
-  'logfile': None,
+  'logfile': '/var/log/logcarrier-tail.log',
   'loglevel': 'DEBUG',
   'inc_timeout_multipler' : 2,
   'inc_timeout_min' : 1,
@@ -46,7 +46,6 @@ conf = {
   'group_defs': {}
 }
 
-conf_d = "/usr/local/etc/logcarrier-tail.d/*.yaml"
 conffile = "/usr/local/etc/logcarrier-tail.yaml"
 if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
   conffile = sys.argv[1]
@@ -55,7 +54,7 @@ f = open(conffile)
 conf.update(yaml.safe_load(f))
 f.close()
 
-
+conf_d = os.path.join(os.path.dirname(conffile), 'logcarrier-tail.d')
 for fn in glob.glob(conf_d):
   f = open(fn)
   d = yaml.safe_load(f)
