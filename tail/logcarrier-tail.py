@@ -54,7 +54,7 @@ f = open(conffile)
 conf.update(yaml.safe_load(f))
 f.close()
 
-conf_d = os.path.join(os.path.dirname(conffile), 'logcarrier-tail.d')
+conf_d = re.sub("\.yaml$", '', conffile) + '.d/*.yaml'
 for fn in glob.glob(conf_d):
   f = open(fn)
   d = yaml.safe_load(f)
