@@ -153,7 +153,7 @@ def do_tail():
             for a in ['host','port','key','protocol','sync_log_rotate','from_begin','from_begin_maxsize','dirname_prefix']:
               files[filename][a] = conf[a]
             if group in conf['group_defs']:
-              for a in ['host','port','key','protocol','dirname','subdirname','dirname_prefix','aggregate','file_prefix','file_suffix','filename_match','filename_fmt','dirname_fmt','sync_log_rotate','skip_line_regexp','only_line_regexp','max_mtime_age']:
+              for a in ['host','port','key','protocol','dirname','subdirname','dirname_prefix','aggregate','filename','file_prefix','file_suffix','filename_match','filename_fmt','dirname_fmt','sync_log_rotate','skip_line_regexp','only_line_regexp','max_mtime_age']:
                 if a in conf['group_defs'][group]:
                   files[filename][a] = conf['group_defs'][group][a]
             if '///' in filemask:
@@ -232,6 +232,8 @@ def do_tail():
                           dirname = files[filename]['dirname']
                         if 'subdirname' in files[filename] and files[filename]['subdirname']:
                           dirname += '/'+files[filename]['subdirname']
+                        if 'filename' in files[filename] and files[filename]['filename']:
+                          logname = files[filename]['filename']
                         if 'filename_match' in files[filename] and files[filename]['filename_match']:
                           if 'filename_fmt' in files[filename] and files[filename]['filename_fmt']:
                             logname = regexp_fmt(os.path.basename(filename), files[filename]['filename_match'], files[filename]['filename_fmt'])
@@ -253,7 +255,7 @@ def do_tail():
                                     logger.error("Error while rotating file %s on storage" % logname)
                                 break
                         else:
-                            headline = "DATA %s %s %s %s" % ( files[filename]['key'], group, dirname, logname ) 
+                            headline = "DATA %s %s %s %s" % ( files[filename]['key'], group, dirname, logname )
                             if protocol == 2:
                               headline += " %s" % bcnt
                             s.send(headline + "\n")
@@ -375,7 +377,7 @@ def do_tail():
               except:
                 logger.exception("Error: unknown error")
 
-        
+
             if not max_lines_reached:
               try:
                 fstat = os.stat(filename)
@@ -456,7 +458,7 @@ def main():
 
   logger.debug("position_file: " + conf['position_file'])
 
-  if os.path.isfile(conf['position_file']): 
+  if os.path.isfile(conf['position_file']):
     try:
       fd = open(conf['position_file'], 'r')
       for line in fd.readlines():
