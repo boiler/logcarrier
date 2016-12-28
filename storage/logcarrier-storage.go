@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -22,18 +24,14 @@ import (
 
 import _ "net/http/pprof"
 
-type lRequest struct {
-	act   int
-	str   string
-	rchan chan *lReply
+var locksCount int32 = 0
+
+type Locks struct {
+	sync.RWMutex
+	fmap map[string]*sync.RWMutex
 }
 
-type lReply struct {
-	res bool
-	str string
-}
-
-type sampleConfig struct {
+type Config struct {
 	Listen      string        `toml:"listen"`
 	ListenDebug string        `toml:"listen_debug"`
 	WaitTimeout time.Duration `toml:"wait_timeout"`
@@ -43,11 +41,11 @@ type sampleConfig struct {
 	LogFile     string        `toml:"logfile"`
 }
 
-func newSampleConfig() *sampleConfig {
-	config := &sampleConfig{}
+func newConfig() *Config {
+	config := &Config{}
 	config.Listen = "0.0.0.0:1466"
 	config.ListenDebug = ""
-	config.WaitTimeout = 10
+	config.WaitTimeout = 60
 	config.Key = "key"
 	config.DestDir = "./logs"
 	config.DestDirMode = 0755
@@ -71,7 +69,7 @@ func main() {
 
 	flag.Parse()
 
-	cfg := newSampleConfig()
+	cfg := newConfig()
 	if err := config.Parse(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, err.Error())
 		os.Exit(1)
@@ -106,12 +104,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	lChan := make(chan *lRequest)
 	defer l.Close()
 	logging.Info("Listening on " + cfg.Listen)
 	acceptConn := true
 
-	go fLocker(lChan)
+	locks := &Locks{
+		fmap: make(map[string]*sync.RWMutex),
+	}
 
 	go func() {
 		for {
@@ -119,7 +118,7 @@ func main() {
 			if err != nil {
 				logging.Critical("Error accepting: %s", err.Error())
 			}
-			go handleRequest(conn, cfg, lChan)
+			go handleRequest(conn, cfg, locks)
 			if !acceptConn {
 				break
 			}
@@ -141,61 +140,28 @@ sigLoop:
 		}
 	}
 
-	go func() {
-		for {
-			_, ll := lChanReq(2, "", lChan)
-			logging.Info("Waiting for %s locks", ll)
-			time.Sleep(10 * time.Second)
-		}
-	}()
-
+	i := 0
 	for {
-		if le, _ := lChanReq(2, "", lChan); !le {
+		lcnt := atomic.LoadInt32(&locksCount)
+		if lcnt < 1 {
 			break
 		}
-		time.Sleep(time.Second)
+		if i == 0 {
+			logging.Info("Waiting for %d locks", lcnt)
+		}
+		i++
+		if i > 100 {
+			i = 0
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	logging.Info("EXIT")
 }
 
-func fLocker(lChan chan *lRequest) {
-	locks := make(map[string]string)
-	for {
-		r := true
-		rstr := ""
-		m := <-lChan
-		fpath := m.str
-		switch m.act {
-		case 0: // remove lock
-			delete(locks, fpath)
-		case 1: // set lock
-			if _, le := locks[fpath]; le {
-				r = false
-			} else {
-				locks[fpath] = "1"
-			}
-		case 2: // ask locks number
-			ln := len(locks)
-			rstr = strconv.Itoa(ln)
-			if ln == 0 {
-				r = false
-			}
-		}
-		m.rchan <- &lReply{r, rstr}
-	}
-}
-
-func lChanReq(act int, str string, lChan chan *lRequest) (bool, string) {
-	req := &lRequest{act, str, make(chan *lReply)}
-	lChan <- req
-	rep := <-req.rchan
-	return rep.res, rep.str
-}
-
 // Handles incoming requests.
-func handleRequest(conn net.Conn, cfg *sampleConfig, lChan chan *lRequest) {
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+func handleRequest(conn net.Conn, cfg *Config, locks *Locks) {
+	conn.SetDeadline(time.Now().Add(60 * time.Second))
 	defer conn.Close()
 
 	remoteAddr, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
@@ -280,16 +246,14 @@ func handleRequest(conn net.Conn, cfg *sampleConfig, lChan chan *lRequest) {
 		os.MkdirAll(dpath, cfg.DestDirMode)
 	}
 
-	if r, _ := lChanReq(1, fpath, lChan); !r {
-		logging.Info("%s %s is locked", remoteAddr, fpath)
-		conn.Write([]byte("300 WAIT\n"))
-		conn.SetDeadline(time.Now().Add(60 * time.Second))
-		for !r {
-			time.Sleep(100 * time.Millisecond)
-			r, _ = lChanReq(1, fpath, lChan)
-		}
+	locks.Lock()
+	if _, ok := locks.fmap[fpath]; !ok {
+		locks.fmap[fpath] = new(sync.RWMutex)
 	}
-	defer lChanReq(0, fpath, lChan)
+	flock := locks.fmap[fpath]
+	locks.Unlock()
+	atomic.AddInt32(&locksCount, 1)
+	flock.Lock()
 
 	const fileflag int = os.O_CREATE | os.O_APPEND | os.O_RDWR
 	const filemode os.FileMode = 0644
@@ -298,6 +262,8 @@ func handleRequest(conn net.Conn, cfg *sampleConfig, lChan chan *lRequest) {
 		panic(err)
 	}
 	defer f.Close()
+	defer flock.Unlock()
+	defer atomic.AddInt32(&locksCount, -1)
 
 	ok := false
 	linesNum := 0
@@ -310,7 +276,7 @@ func handleRequest(conn net.Conn, cfg *sampleConfig, lChan chan *lRequest) {
 		conn.Write([]byte("200 READY protocol 2\n"))
 		brem := bcnt
 		for {
-			conn.SetDeadline(time.Now().Add(10 * time.Second))
+			conn.SetDeadline(time.Now().Add(cfg.WaitTimeout * time.Second))
 			buf := make([]byte, 1024)
 			bn, err := reader.Read(buf)
 			if err != nil {
