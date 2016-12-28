@@ -65,6 +65,47 @@ func PathExists(path string) bool {
 	return false
 }
 
+func CheckSymlinkExists(path string) string {
+	checkFileInfo, err := os.Lstat(path)
+	if err == nil {
+		if checkFileInfo.Mode()&os.ModeSymlink != 0 {
+			return "symlink"
+		} else {
+			return "file"
+		}
+	}
+	if os.IsNotExist(err) {
+		return "none"
+	}
+	return "none"
+}
+
+func GetFileDateTime(path string) time.Time {
+	checkFileInfo, err := os.Lstat(path)
+	if err == nil {
+		return checkFileInfo.ModTime()
+	}
+	return time.Now()
+}
+
+func MakeFilename(t time.Time, dname string, dpath_orig string, fname string) (string, string, string, string) {
+	fname_full := fmt.Sprintf("/%d/%02d/%02d/%s-%d.%02d.%02d-%02d", t.Year(), t.Month(), t.Day(), fname, t.Year(), t.Month(), t.Day(), t.Hour())
+	fname_new := filepath.Base(fname_full)
+	dpath := path.Join(dpath_orig, filepath.Dir(fname_full))
+	fpath := path.Join(dpath, fname_new)
+	fpathAbs, _ := filepath.Abs(fpath)
+	return fname_new, dpath, fpath, fpathAbs
+}
+
+func MakeSymlink(symlinkTarget string, symlinkName string) bool {
+	err := os.Symlink(symlinkTarget, symlinkName)
+	if err != nil {
+		logging.Error("Can't create symlink %s => %s", symlinkTarget, symlinkName)
+		return false
+	}
+	return true
+}
+
 func main() {
 
 	flag.Parse()
@@ -180,18 +221,55 @@ func handleRequest(conn net.Conn, cfg *Config, locks *Locks) {
 	acmd := lineslc[0]
 	akey := lineslc[1]
 	dname := lineslc[3]
-	fname := lineslc[4]
+	fname_orig := lineslc[4]
 	bcnt := 0
 
-	dpath := path.Join(cfg.DestDir, dname)
-	fpath := path.Join(dpath, fname)
-
-	fpathAbs, _ := filepath.Abs(fpath)
+	dpath_orig := path.Join(cfg.DestDir, dname)
+	fpath_orig := path.Join(dpath_orig, fname_orig)
+	fpathAbs_orig, _ := filepath.Abs(fpath_orig)
 	cfgDirAbs, _ := filepath.Abs(cfg.DestDir)
+
+	// Create rotated logname and path
+	fname, dpath, fpath, fpathAbs := MakeFilename(time.Now(), dname, dpath_orig, fname_orig)
 
 	if !strings.HasPrefix(fpathAbs, cfgDirAbs) {
 		logging.Error("%s unsecure file path %s => %s", remoteAddr, dname, fpathAbs)
 		return
+	}
+
+	// Create Symlink from original log_name to current rotated logname
+	fpath_relative, _ := filepath.Rel(dpath_orig, fpath)
+	fpath_file := CheckSymlinkExists(fpath_orig)
+	if fpath_file == "symlink" {
+		fpath_orig_symlink_target, _ := os.Readlink(fpath_orig)
+		if fpath_orig_symlink_target != fpath_relative {
+			err := os.Remove(fpath_orig)
+			if err == nil {
+				MakeSymlink(fpath_relative, fpath_orig)
+			} else {
+				logging.Error("Can't remove old symlink %s", fpath_orig)
+			}
+		}
+	} else if fpath_file == "file" {
+		logging.Error("%s - real file, need moving!!!", fpath_orig)
+		_, move_dpath, move_fpath, move_fpathAbs := MakeFilename(GetFileDateTime(fpath_orig), dname, dpath_orig, fname_orig)
+		logging.Error("Move %s, to %s!!!", fpath_orig, move_fpath)
+		if PathExists(move_fpath) {
+			logging.Error("File %s exists, can not moving.....", move_fpath)
+		} else {
+			if !PathExists(move_dpath) {
+				os.MkdirAll(move_dpath, cfg.DestDirMode)
+			}
+			err := os.Rename(fpathAbs_orig, move_fpathAbs)
+			if err == nil {
+				logging.Info("File moved %s => %s", fpathAbs_orig, move_fpathAbs)
+				MakeSymlink(fpath_relative, fpath_orig)
+			} else {
+				logging.Error("Can't move file %s => %s", fpathAbs, move_fpathAbs)
+			}
+		}
+	} else {
+		MakeSymlink(fpath_relative, fpath_orig)
 	}
 
 	if acmd == "DATA" {
