@@ -4,7 +4,7 @@ package main
 
 import "fmt"
 
-const _CompressionMethod_name = "zstdgzipraw"
+const _CompressionMethod_name = "zstdzlibraw"
 
 var _CompressionMethod_index = [...]uint8{0, 4, 8, 11}
 

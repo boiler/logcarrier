@@ -13,8 +13,8 @@ const (
 	// ZStd is used for ZStd compression
 	ZStd CompressionMethod = iota
 
-	// GZip is used for GZip compression
-	GZip
+	// ZLib is used for ZLib compression
+	ZLib
 
 	// Raw means no compression
 	Raw
@@ -22,7 +22,7 @@ const (
 
 var compressionMapping = map[string]CompressionMethod{
 	ZStd.String(): ZStd,
-	GZip.String(): GZip,
+	ZLib.String(): ZLib,
 	Raw.String():  Raw,
 }
 
