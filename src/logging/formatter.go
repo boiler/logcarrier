@@ -29,7 +29,7 @@ var (
 
 func init() {
 	baseTimestamp = time.Now()
-	isTerminal = logrus.IsTerminal()
+	isTerminal = logrus.IsTerminal(os.Stderr)
 }
 
 // This is to not silently overwrite `time`, `msg` and `level` fields when
