@@ -1,4 +1,4 @@
-package textio
+package logio
 
 import (
 	"bytes"

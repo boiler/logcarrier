@@ -1,9 +1,9 @@
 /*
-package textio
-bufferized writers (and readers?) with line integrity in mind
+package logio
+bufferized writers (and readers?) with log line integrity in mind
 */
 
-package textio
+package logio
 
 import (
 	"bytes"
