@@ -4,7 +4,9 @@ package fileio
 
 package fileio
 
-import "os"
+import (
+	"os"
+)
 
 // File object that is steady against rotating.
 type File struct {

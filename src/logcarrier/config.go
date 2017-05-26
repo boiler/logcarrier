@@ -31,8 +31,7 @@ type Config struct {
 }
 
 // sensible defaults
-func newConfig() *Config {
-	config := &Config{}
+func initConfig(config *Config) {
 	config.Listen = "0.0.0.0:1466"
 	config.ListenDebug = ""
 	config.WaitTimeout = 60
@@ -44,12 +43,12 @@ func newConfig() *Config {
 	config.Compression.Level = 0
 	config.Buffers.Input = 128 * 1024
 	config.Buffers.Framing = 256 * 1024
-	return config
 }
 
 // LoadConfig loads config from given file
 func LoadConfig(filePath string) (res Config) {
 	var err error
+	initConfig(&res)
 	defer func() {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read configuration file `\033[1m%s\033[0m`: \033[31m%s\033[0m\n", filePath, err)

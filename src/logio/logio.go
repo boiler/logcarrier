@@ -36,6 +36,9 @@ type Writer struct {
 	// Statistics data
 	lineCount      int
 	savedLineCount int
+	prevLineCount  int
+
+	worthFlushing bool
 }
 
 // NewWriter returns a new writer whose buffer has the default size
@@ -46,11 +49,12 @@ func NewWriter(writer io.Writer) *Writer {
 // NewWriterSize returns a new writer whose buffer has at least specified size
 func NewWriterSize(writer io.Writer, size int) *Writer {
 	res := &Writer{
-		bufsize:  size,
-		writer:   writer,
-		buffer:   &bytes.Buffer{},
-		linebuf:  &bytes.Buffer{},
-		finished: true,
+		bufsize:       size,
+		writer:        writer,
+		buffer:        &bytes.Buffer{},
+		linebuf:       &bytes.Buffer{},
+		finished:      true,
+		worthFlushing: true,
 	}
 	res.buffer.Grow(size)
 	res.linebuf.Grow(8192)
@@ -109,6 +113,7 @@ func (w *Writer) Write(data []byte) (nn int, err error) {
 			w.linebuf.Reset()
 		}
 		if w.buffer.Len()+len(line) > w.bufsize {
+			w.worthFlushing = false
 			err = w.Flush()
 			if err != nil {
 				return nn, err
@@ -134,4 +139,12 @@ func (w *Writer) LinesBuffered() int {
 // LinesWritten returns how many lines were written to the underlying io.Writer
 func (w *Writer) LinesWritten() int {
 	return w.savedLineCount
+}
+
+// WorthFlushing checks if any write was done after the last check
+func (w *Writer) WorthFlushing() bool {
+	res := w.worthFlushing && w.savedLineCount != w.lineCount && w.savedLineCount == w.prevLineCount
+	w.prevLineCount = w.savedLineCount
+	w.worthFlushing = true
+	return res
 }
