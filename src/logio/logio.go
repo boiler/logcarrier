@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	defaultBufferSize = 8192
+	defaultBufferSize = 128 * 1024 * 1024
 )
 
 // Writer is a bufferized writer which takes care of line integrity, i.e. the writer beneath
@@ -38,20 +38,23 @@ type Writer struct {
 	savedLineCount int
 }
 
-// NewWriter returns a new reader whose buffer has the default size
+// NewWriter returns a new writer whose buffer has the default size
 func NewWriter(writer io.Writer) *Writer {
 	return NewWriterSize(writer, defaultBufferSize)
 }
 
-// NewWriterSize returns a new reader whose buffer has at least specified size
+// NewWriterSize returns a new writer whose buffer has at least specified size
 func NewWriterSize(writer io.Writer, size int) *Writer {
-	return &Writer{
+	res := &Writer{
 		bufsize:  size,
 		writer:   writer,
 		buffer:   &bytes.Buffer{},
 		linebuf:  &bytes.Buffer{},
 		finished: true,
 	}
+	res.buffer.Grow(size)
+	res.linebuf.Grow(8192)
+	return res
 }
 
 // Flush flushes all full lines to the underlying io.Writer
@@ -82,7 +85,7 @@ func (w *Writer) FlushAll() error {
 	return nil
 }
 
-// Write writes the content of p into the buffer.
+// Write writes the content of data into the buffer.
 func (w *Writer) Write(data []byte) (nn int, err error) {
 	for len(data) > 0 {
 		pos := bytes.IndexByte(data, '\n')
