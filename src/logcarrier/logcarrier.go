@@ -1,8 +1,15 @@
 package main
 
-import "fmt"
+import "logging"
 
 func main() {
-	config := LoadConfig("/home/emacs/Sources/logcarrier/test.toml")
-	fmt.Println(config)
+	cfg := LoadConfig("/home/emacs/Sources/logcarrier/test.toml")
+
+	if len(cfg.LogFile) > 0 {
+		loggingConfig := logging.NewConfig()
+		loggingConfig.Logfile = cfg.LogFile
+		if err := logging.SetConfig(loggingConfig); err != nil {
+			panic(err)
+		}
+	}
 }

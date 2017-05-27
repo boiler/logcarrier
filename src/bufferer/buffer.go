@@ -15,4 +15,7 @@ type Bufferer interface {
 
 	// Flush flushes all buffered data
 	Flush() error
+
+	// WorthFlushing checks if underlying objects decided it is a good idea to flush buffers
+	WorthFlushing() bool
 }

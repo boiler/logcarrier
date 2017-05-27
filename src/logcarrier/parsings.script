@@ -1,0 +1,6 @@
+header = !
+	Command(string) ' '
+	Key(string) ' '
+	Group(string) ' '
+	Dirname(string) ' '
+	Logname(string) $;
