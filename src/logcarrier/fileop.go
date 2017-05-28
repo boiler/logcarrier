@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufferer"
+	"fmt"
 	"logging"
 	"sync"
 	"time"
@@ -21,7 +22,8 @@ type FileOp struct {
 	items     map[string]Buf
 	itemsLock *sync.Mutex
 	factory   func(string) bufferer.Bufferer // Generates bufferer for a given key
-	ticker    *time.Ticker
+
+	ticker *time.Ticker
 
 	stop bool
 }
@@ -98,4 +100,23 @@ func (f *FileOp) GetFile(name string) Buf {
 	}
 	f.itemsLock.Unlock()
 	return buf
+}
+
+// Logrotate obviously logrotates file
+func (f *FileOp) Logrotate(name, newpath string) (err error) {
+	f.itemsLock.Lock()
+	buf, ok := f.items[name]
+	f.itemsLock.Unlock()
+	if !ok {
+		return fmt.Errorf("file `%s` not found", name)
+	}
+	buf.Lock.Lock()
+	if err := buf.Buf.Close(); err != nil {
+		goto exit
+	}
+	err = buf.Buf.Logrotate(newpath)
+
+exit:
+	buf.Lock.Unlock()
+	return err
 }

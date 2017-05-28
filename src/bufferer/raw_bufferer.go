@@ -44,3 +44,8 @@ func (b *RawBufferer) Flush() error {
 	}
 	return nil
 }
+
+// Logrotate implementation
+func (b *RawBufferer) Logrotate(newpath string) error {
+	return b.d.Logrotate(newpath)
+}
