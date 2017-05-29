@@ -1,0 +1,7 @@
+[compression]
+method="zlib"
+level=6
+
+[buffers]
+input="128Kb"
+framing="256Kb"

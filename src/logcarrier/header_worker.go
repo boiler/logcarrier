@@ -25,6 +25,7 @@ type HeaderPool struct {
 	logrotatejobs chan LogrotateJob
 
 	rotname     func(string) string
+	mkdir       func(string) error
 	jobsCounter int
 	wg          *sync.WaitGroup
 	stopQueue   chan int
@@ -34,6 +35,7 @@ type HeaderPool struct {
 func NewHeaderPool(
 	root utils.PathGen,
 	rotname func(string) string,
+	mkdir func(string) error,
 	headerjobs chan HeaderJob,
 	dumpjobs chan DumpJob,
 	logrotatejobs chan LogrotateJob,
@@ -42,6 +44,7 @@ func NewHeaderPool(
 	return &HeaderPool{
 		root:          root,
 		rotname:       rotname,
+		mkdir:         mkdir,
 		headerjobs:    headerjobs,
 		dumpjobs:      dumpjobs,
 		logrotatejobs: logrotatejobs,
@@ -62,6 +65,8 @@ func (hp *HeaderPool) Stop() {
 
 // Spawn spawns a job
 func (hp *HeaderPool) Spawn() {
+	var dirs = map[string]bool{}
+	hp.jobsCounter++
 	go func() {
 		hp.wg.Add(1)
 		wrk := &headerWorker{
@@ -81,8 +86,20 @@ func (hp *HeaderPool) Spawn() {
 				}
 				switch *(*string)(unsafe.Pointer(&wrk.parser.Command)) {
 				case "DATA":
+					dirname := string(wrk.parser.Dirname)
+					if _, ok := dirs[dirname]; !ok {
+						path := hp.root.Join(dirname)
+						if !utils.PathExists(path) {
+							err := hp.mkdir(path)
+							if err != nil {
+								logging.Error("SERVER: couldn't create directory, %s", err)
+								continue
+							}
+						}
+						dirs[dirname] = true
+					}
 					hp.dumpjobs <- DumpJob{
-						Name: hp.root.Join(string(wrk.parser.Dirname), string(wrk.parser.Logname)),
+						Name: hp.root.Join(dirname, string(wrk.parser.Logname)),
 						Size: int(wrk.parser.Size),
 						Conn: x.Conn,
 					}

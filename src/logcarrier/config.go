@@ -27,7 +27,20 @@ type Config struct {
 	Buffers struct {
 		Input   Size `toml:"input"`
 		Framing Size `toml:"framing"`
+		ZSTDict Size `toml:"zstdict"`
+
+		Connections int `toml:"connections"`
+		Dumps       int `toml:"dumps"`
+		Logrotates  int `toml:"logrotates"`
 	} `toml:"buffers"`
+
+	Workers struct {
+		Router     int `toml:"route"`
+		Dumper     int `toml:"dumper"`
+		Logrotater int `toml:"logrotater"`
+
+		FlusherSleep time.Duration `toml:"flusher_sleep"`
+	} `toml:"workers"`
 }
 
 // sensible defaults
@@ -39,10 +52,21 @@ func initConfig(config *Config) {
 	config.DestDir = "./logs"
 	config.DestDirMode = 0755
 	config.LogFile = ""
+
 	config.Compression.Method = Raw
 	config.Compression.Level = 0
+
 	config.Buffers.Input = 128 * 1024
 	config.Buffers.Framing = 256 * 1024
+	config.Buffers.ZSTDict = 128 * 1024
+	config.Buffers.Connections = 1024
+	config.Buffers.Dumps = 512
+	config.Buffers.Logrotates = 512
+
+	config.Workers.Router = 1024
+	config.Workers.Dumper = 24
+	config.Workers.Logrotater = 48
+	config.Workers.FlusherSleep = time.Second * 30
 }
 
 // LoadConfig loads config from given file

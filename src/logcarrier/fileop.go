@@ -21,76 +21,85 @@ type Buf struct {
 type FileOp struct {
 	items     map[string]Buf
 	itemsLock *sync.Mutex
-	factory   func(string) bufferer.Bufferer // Generates bufferer for a given key
+	factory   func(string) (bufferer.Bufferer, error) // Generates bufferer for a given key
 
-	ticker *time.Ticker
-
-	stop bool
+	ticker      *time.Ticker
+	stopChannel chan int
 }
 
 // NewFileOp generates file service
 //   factory creates bufferer object
 //   ticker is used to generate
-func NewFileOp(factory func(string) bufferer.Bufferer, ticker *time.Ticker) *FileOp {
+func NewFileOp(factory func(string) (bufferer.Bufferer, error), ticker *time.Ticker) *FileOp {
 	res := &FileOp{
-		items:     make(map[string]Buf),
-		itemsLock: &sync.Mutex{},
-		factory:   factory,
-		ticker:    ticker,
-		stop:      false,
+		items:       make(map[string]Buf),
+		itemsLock:   &sync.Mutex{},
+		factory:     factory,
+		ticker:      ticker,
+		stopChannel: make(chan int),
 	}
 
 	go func() {
 		logging.Info("FLUSHER: started")
 
 		buf := make([]Buf, 4096)
-		for t := range res.ticker.C {
-			flushed := 0
-			flushErrors := 0
-			wereLocked := 0
 
-			buf = buf[:0]
-			res.itemsLock.Lock()
-			for _, v := range res.items {
-				buf = append(buf, v)
-			}
-			res.itemsLock.Unlock()
+		for {
+			select {
+			case t := <-ticker.C:
+				flushed := 0
+				flushErrors := 0
+				wereLocked := 0
 
-			logging.Info("FLUSHER: flushing %d items", len(buf))
-			for _, v := range buf {
-				locked := v.Lock.TryLock()
-				if !locked {
-					wereLocked++
-					continue
+				buf = buf[:0]
+				res.itemsLock.Lock()
+				for _, v := range res.items {
+					buf = append(buf, v)
 				}
-				if err := v.Buf.Flush(); err != nil {
-					logging.Error("FLUSHER: error flushing \033[1m%s\033[0m, \033[1m%s\033[0m", v.Name, err)
-					flushErrors++
-				} else {
-					flushed++
+				res.itemsLock.Unlock()
+
+				logging.Info("FLUSHER: flushing %d items", len(buf))
+				for _, v := range buf {
+					locked := v.Lock.TryLock()
+					if !locked {
+						wereLocked++
+						continue
+					}
+					if err := v.Buf.Flush(); err != nil {
+						logging.Error("FLUSHER: error flushing \033[1m%s\033[0m, \033[1m%s\033[0m", v.Name, err)
+						flushErrors++
+					} else {
+						flushed++
+					}
+					v.Lock.Unlock()
 				}
-				v.Lock.Unlock()
-			}
-			logging.Info(
-				`FLUSHER:
+				logging.Info(
+					`FLUSHER:
 flushed: %d
 were locked: %d
 flushes failed: %d
 duration: %s`,
-				flushed, wereLocked, flushErrors, time.Now().Sub(t))
+					flushed, wereLocked, flushErrors, time.Now().Sub(t))
+			case <-res.stopChannel:
+				logging.Info("FLUSHER: was ordered to stop flushing, leaving")
+				res.stopChannel <- 0
+				return
+			}
 		}
-		logging.Info("FLUSHER: was ordered to stop flushing, leaving")
 	}()
 
 	return res
 }
 
 // GetFile retrieves Buf
-func (f *FileOp) GetFile(name string) Buf {
+func (f *FileOp) GetFile(name string) (res Buf, err error) {
 	f.itemsLock.Lock()
 	buf, ok := f.items[name]
 	if !ok {
-		b := f.factory(name)
+		b, err := f.factory(name)
+		if err != nil {
+			return res, err
+		}
 		buf = Buf{
 			Name: name,
 			Lock: &trylock.Mutex{},
@@ -99,7 +108,7 @@ func (f *FileOp) GetFile(name string) Buf {
 		f.items[name] = buf
 	}
 	f.itemsLock.Unlock()
-	return buf
+	return buf, nil
 }
 
 // Logrotate obviously logrotates file
@@ -119,4 +128,10 @@ func (f *FileOp) Logrotate(name, newpath string) (err error) {
 exit:
 	buf.Lock.Unlock()
 	return err
+}
+
+// Join wait for the background worker to stop
+func (f *FileOp) Join() {
+	f.stopChannel <- 0
+	<-f.stopChannel
 }

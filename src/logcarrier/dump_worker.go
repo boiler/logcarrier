@@ -39,6 +39,7 @@ func NewDumpPool(netjobs chan DumpJob, files *FileOp, timeout time.Duration) *Du
 		files:       files,
 		stopQueue:   make(chan int),
 		waitTimeout: timeout,
+		wg:          &sync.WaitGroup{},
 	}
 }
 
@@ -58,6 +59,7 @@ type worker struct {
 
 // Spawn spawns worker
 func (dp *DumpPool) Spawn() {
+	dp.jobsCounter++
 	go func() {
 		dp.wg.Add(1)
 		w := &worker{
@@ -75,6 +77,7 @@ func (dp *DumpPool) Spawn() {
 					logging.Error("DUMPING: cannot close connection to %s: %s", x.Conn.RemoteAddr().String(), err)
 				}
 			case <-dp.stopQueue:
+				dp.wg.Done()
 				return
 			}
 		}
@@ -82,7 +85,10 @@ func (dp *DumpPool) Spawn() {
 }
 
 func (dp *DumpPool) dump(x DumpJob, w *worker) (err error) {
-	buf := dp.files.GetFile(x.Name)
+	buf, err := dp.files.GetFile(x.Name)
+	if err != nil {
+		return
+	}
 	buf.Lock.Lock()
 	left := x.Size
 	if x.Size > 0 { // Protocol 2

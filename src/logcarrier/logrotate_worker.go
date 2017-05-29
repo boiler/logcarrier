@@ -47,6 +47,7 @@ func (lr *LogrotatePool) Stop() {
 
 // Spawn spawns a worker
 func (lr *LogrotatePool) Spawn() {
+	lr.jobsCounter++
 	go func() {
 		lr.wg.Add(1)
 		for {
