@@ -1,5 +1,5 @@
 [compression]
-method="zlib"
+method="raw"
 level=6
 
 [buffers]

@@ -52,8 +52,7 @@ func NewWriterSize(writer io.Writer, size int) *Writer {
 func (w *Writer) Flush() error {
 	if w.buffer.Len() > 0 {
 		w.flushCounter = w.frameInsert
-		_, err := io.Copy(w.writer, w.buffer)
-		if err != nil {
+		if _, err := w.buffer.WriteTo(w.writer); err != nil {
 			return err
 		}
 	}
@@ -69,7 +68,6 @@ func (w *Writer) Write(data []byte) (nn int, err error) {
 		if err != nil {
 			return
 		}
-		w.buffer.Reset()
 	}
 	if len(data) > w.bufsize {
 		nn, err = w.writer.Write(data)

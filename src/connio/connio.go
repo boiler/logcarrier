@@ -28,5 +28,5 @@ func (r *Reader) SetConn(conn net.Conn) {
 // Read implementation
 func (r *Reader) Read(p []byte) (n int, err error) {
 	r.conn.SetReadDeadline(time.Now().Add(r.await))
-	return r.Read(p)
+	return r.conn.Read(p)
 }

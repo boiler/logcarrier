@@ -1,0 +1,7 @@
+files:
+  bos_fss:
+    - "/home/emacs/Sources/logcarrier/bos_fss.log"
+
+goups_defs:
+  bos_fss:
+    - 12

@@ -4,6 +4,8 @@ package bufferer provides
 
 package bufferer
 
+import "bytes"
+
 // Bufferer is an interface that groups set of methods that are
 // needed for files syncing and log rotating
 type Bufferer interface {
@@ -18,4 +20,10 @@ type Bufferer interface {
 
 	// Logrotate rotates underlying log
 	Logrotate(newname string) error
+
+	// DumpState dumps the state of the bufferer object
+	DumpState() (*bytes.Buffer, error)
+
+	// RestoreState restores the state of the bufferer object
+	RestoreState(*bytes.Buffer) error
 }

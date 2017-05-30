@@ -1,9 +1,11 @@
 package bufferer
 
 import (
+	"bytes"
 	"fileio"
 	"frameio"
 	"logio"
+	"sync"
 )
 
 // ZSTDBufferer ...
@@ -12,6 +14,7 @@ type ZSTDBufferer struct {
 	c *ZSTDWriter
 	f *frameio.Writer
 	d *fileio.File
+	p *sync.Pool
 }
 
 // NewZSTDBufferer constructor
@@ -55,6 +58,9 @@ func (b *ZSTDBufferer) Flush() error {
 		}
 	}
 	if b.f.WorthFlushing() {
+		if err := b.c.Close(); err != nil {
+			return err
+		}
 		if err := b.f.Flush(); err != nil {
 			return err
 		}
@@ -65,4 +71,14 @@ func (b *ZSTDBufferer) Flush() error {
 // Logrotate implementation
 func (b *ZSTDBufferer) Logrotate(newpath string) error {
 	return b.d.Logrotate(newpath)
+}
+
+// DumpState implementation
+func (b *ZSTDBufferer) DumpState() (*bytes.Buffer, error) {
+	panic("not implemented")
+}
+
+// RestoreState implementation
+func (b *ZSTDBufferer) RestoreState(*bytes.Buffer) error {
+	panic("not implemented")
 }

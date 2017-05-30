@@ -13,16 +13,12 @@ const (
 	// ZStd is used for ZStd compression
 	ZStd CompressionMethod = iota
 
-	// ZLib is used for ZLib compression
-	ZLib
-
 	// Raw means no compression
 	Raw
 )
 
 var compressionMapping = map[string]CompressionMethod{
 	ZStd.String(): ZStd,
-	ZLib.String(): ZLib,
 	Raw.String():  Raw,
 }
 
@@ -49,4 +45,16 @@ func (i *CompressionMethod) UnmarshalText(text []byte) error {
 	}
 	*i = value
 	return nil
+}
+
+// String ...
+func (i CompressionMethod) String() string {
+	switch i {
+	case ZStd:
+		return "zstd"
+	case Raw:
+		return "raw"
+	default:
+		panic(fmt.Errorf("Unsupported compression code %d", i))
+	}
 }

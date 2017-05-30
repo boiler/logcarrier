@@ -47,7 +47,7 @@ type Config struct {
 func initConfig(config *Config) {
 	config.Listen = "0.0.0.0:1466"
 	config.ListenDebug = ""
-	config.WaitTimeout = 60
+	config.WaitTimeout = 60 * time.Second
 	config.Key = "key"
 	config.DestDir = "./logs"
 	config.DestDirMode = 0755

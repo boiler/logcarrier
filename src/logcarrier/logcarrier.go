@@ -17,7 +17,6 @@ import (
 	"utils"
 
 	"github.com/Datadog/zstd"
-	"github.com/datadog/czlib"
 )
 
 func main() {
@@ -54,29 +53,12 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
-			f := frameio.NewWriter(d)
+			f := frameio.NewWriterSize(d, int(cfg.Buffers.Framing))
 			c := bufferer.NewZSTDWriter(func() *zstd.Writer {
 				return zstd.NewWriterLevelDict(f, int(cfg.Compression.Level), make([]byte, cfg.Buffers.ZSTDict))
 			})
-			l := logio.NewWriter(c)
+			l := logio.NewWriterSize(c, int(cfg.Buffers.Input))
 			return bufferer.NewZSTDBufferer(l, c, f, d), nil
-		}
-	case ZLib:
-		factory = func(name string) (bufferer.Bufferer, error) {
-			d, err := fileio.Open(root, name)
-			if err != nil {
-				return nil, err
-			}
-			f := frameio.NewWriter(d)
-			c := bufferer.NewZLIBWriter(func() *czlib.Writer {
-				res, err := czlib.NewWriterLevel(f, int(cfg.Compression.Level))
-				if err != nil {
-					panic(err)
-				}
-				return res
-			})
-			l := logio.NewWriter(c)
-			return bufferer.NewZLIBBufferer(l, c, f, d), nil
 		}
 	case Raw:
 		factory = func(name string) (bufferer.Bufferer, error) {
@@ -84,7 +66,7 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
-			l := logio.NewWriter(d)
+			l := logio.NewWriterSize(d, int(cfg.Buffers.Input))
 			return bufferer.NewRawBufferer(l, d), nil
 		}
 	}

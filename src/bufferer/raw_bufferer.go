@@ -1,6 +1,7 @@
 package bufferer
 
 import (
+	"bytes"
 	"fileio"
 	"logio"
 )
@@ -48,4 +49,14 @@ func (b *RawBufferer) Flush() error {
 // Logrotate implementation
 func (b *RawBufferer) Logrotate(newpath string) error {
 	return b.d.Logrotate(newpath)
+}
+
+// DumpState implementation
+func (b *RawBufferer) DumpState() (*bytes.Buffer, error) {
+	panic("not implemented")
+}
+
+// RestoreState implementation
+func (b *RawBufferer) RestoreState(*bytes.Buffer) error {
+	panic("not implemented")
 }

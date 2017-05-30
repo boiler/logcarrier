@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"logging"
 	"net"
+	"path/filepath"
 	"sync"
 	"time"
 	"unsafe"
@@ -101,14 +102,14 @@ func (hp *HeaderPool) Spawn() {
 						dirs[dirname] = true
 					}
 					hp.dumpjobs <- DumpJob{
-						Name: hp.root.Join(dirname, string(wrk.parser.Logname)),
+						Name: filepath.Join(dirname, string(wrk.parser.Logname)),
 						Size: int(wrk.parser.Size),
 						Conn: x.Conn,
 					}
 				case "ROTATE":
 					hp.logrotatejobs <- LogrotateJob{
-						Name:    hp.root.Join(string(wrk.parser.Dirname), string(wrk.parser.Logname)),
-						Newpath: hp.root.Join(string(wrk.parser.Dirname), string(hp.rotname(string(wrk.parser.Logname)))),
+						Name:    filepath.Join(string(wrk.parser.Dirname), string(wrk.parser.Logname)),
+						Newpath: filepath.Join(string(wrk.parser.Dirname), string(hp.rotname(string(wrk.parser.Logname)))),
 						Conn:    x.Conn,
 					}
 				default:

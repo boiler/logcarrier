@@ -6,6 +6,8 @@ bufferized writers (and readers?) with log line integrity in mind
 package logio
 
 import (
+	"bindec"
+	"binenc"
 	"bytes"
 	"io"
 )
@@ -39,6 +41,8 @@ type Writer struct {
 	prevLineCount  int
 
 	worthFlushing bool
+
+	enc *binenc.BinaryEncoder
 }
 
 // NewWriter returns a new writer whose buffer has the default size
@@ -55,6 +59,8 @@ func NewWriterSize(writer io.Writer, size int) *Writer {
 		linebuf:       &bytes.Buffer{},
 		finished:      true,
 		worthFlushing: true,
+
+		enc: binenc.New(),
 	}
 	res.buffer.Grow(size)
 	res.linebuf.Grow(8192)
@@ -64,8 +70,7 @@ func NewWriterSize(writer io.Writer, size int) *Writer {
 // Flush flushes all full lines to the underlying io.Writer
 func (w *Writer) Flush() error {
 	if w.buffer.Len() > 0 {
-		_, err := io.Copy(w.writer, w.buffer)
-		if err != nil {
+		if _, err := w.buffer.WriteTo(w.writer); err != nil {
 			return err
 		}
 	}
@@ -147,4 +152,74 @@ func (w *Writer) WorthFlushing() bool {
 	w.prevLineCount = w.savedLineCount
 	w.worthFlushing = true
 	return res
+}
+
+// DumpState ...
+func (w *Writer) DumpState(dest *bytes.Buffer) {
+	dest.Write(w.enc.Uint32(uint32(w.bufsize)))
+	dest.Write(w.enc.Uint32(uint32(w.buffer.Len())))
+	dest.Write(w.buffer.Bytes())
+	dest.Write(w.enc.Uint32(uint32(w.linebuf.Len())))
+	dest.Write(w.linebuf.Bytes())
+	dest.Write(w.enc.Bool(w.finished))
+	dest.Write(w.enc.Uint32(uint32(w.lineCount)))
+	dest.Write(w.enc.Uint32(uint32(w.savedLineCount)))
+	dest.Write(w.enc.Uint32(uint32(w.prevLineCount)))
+	dest.Write(w.enc.Bool(w.worthFlushing))
+}
+
+// RestoreState ...
+func (w *Writer) RestoreState(src *bytes.Buffer) {
+	rr := bindec.New(src.Bytes())
+	bufsize, ok := rr.Uint32()
+	if !ok {
+		panic("Cannot restore bufsize")
+	}
+	buflen, ok := rr.Uint32()
+	if !ok {
+		panic("Cannot restore buffer length")
+	}
+	buffer, ok := rr.Bytes(int(buflen))
+	if !ok {
+		panic("Cannot restore a buffer")
+	}
+	linebuflen, ok := rr.Uint32()
+	if !ok {
+		panic("Cannot restore line buffer length")
+	}
+	linebuf, ok := rr.Bytes(int(linebuflen))
+	if !ok {
+		panic("Cannot restore line buffer")
+	}
+	finished, ok := rr.Bool()
+	if !ok {
+		panic("Cannot restore finished state")
+	}
+	linecount, ok := rr.Uint32()
+	if !ok {
+		panic("Cannot restore line count")
+	}
+	savedlinecount, ok := rr.Uint32()
+	if !ok {
+		panic("Cannot restore saved line count")
+	}
+	prevlinecount, ok := rr.Uint32()
+	if !ok {
+		panic("Cannot restore prev(ious) line count")
+	}
+	worthflushing, ok := rr.Bool()
+	if !ok {
+		panic("Cannot restore worthflushing state")
+	}
+
+	w.bufsize = int(bufsize)
+	w.buffer.Reset()
+	w.buffer.Write(buffer)
+	w.linebuf.Reset()
+	w.linebuf.Write(linebuf)
+	w.finished = finished
+	w.lineCount = int(linecount)
+	w.savedLineCount = int(savedlinecount)
+	w.prevLineCount = int(prevlinecount)
+	w.worthFlushing = worthflushing
 }

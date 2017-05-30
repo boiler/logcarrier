@@ -81,7 +81,16 @@ flushes failed: %d
 duration: %s`,
 					flushed, wereLocked, flushErrors, time.Now().Sub(t))
 			case <-res.stopChannel:
-				logging.Info("FLUSHER: was ordered to stop flushing, leaving")
+				logging.Info("FLUSHER: was ordered to stop flushing, closing buffers")
+				res.itemsLock.Lock()
+				for k, v := range res.items {
+					if err := v.Buf.Close(); err != nil {
+						logging.Error("Failed to close %s: %s", k, err)
+					} else {
+						logging.Info("Closed %s", k)
+					}
+				}
+				res.itemsLock.Unlock()
 				res.stopChannel <- 0
 				return
 			}
@@ -98,6 +107,7 @@ func (f *FileOp) GetFile(name string) (res Buf, err error) {
 	if !ok {
 		b, err := f.factory(name)
 		if err != nil {
+			f.itemsLock.Unlock()
 			return res, err
 		}
 		buf = Buf{

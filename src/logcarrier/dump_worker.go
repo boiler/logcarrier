@@ -13,6 +13,7 @@ import (
 var protocol2Header = []byte("200 READY protocol 2\n")
 var protocol1Header = []byte("200 READY\n")
 var okMsg = []byte("200 OK\n")
+var errMsg = []byte("400 Error\n")
 
 // DumpJob connection with tailed data
 type DumpJob struct {
@@ -76,6 +77,7 @@ func (dp *DumpPool) Spawn() {
 					logging.Error("DUMPING: %s", err)
 				}
 				if err := x.Conn.Close(); err != nil {
+					logging.Info("DUMPING: closing connection")
 					logging.Error("DUMPING: cannot close connection to %s: %s", x.Conn.RemoteAddr().String(), err)
 				}
 			case <-dp.stopQueue:
@@ -95,23 +97,26 @@ func (dp *DumpPool) dump(x DumpJob, w *worker) (err error) {
 	left := x.Size
 	if x.Size > 0 { // Protocol 2
 		if _, err := x.Conn.Write(protocol2Header); err != nil {
+			buf.Lock.Unlock()
 			return fmt.Errorf("Failed to set a protocol for  %s: %s", x.Name, err)
 		}
 		w.conn.SetConn(x.Conn)
 		for left > 0 {
 			read, err := w.conn.Read(w.buffer)
 			if err != nil {
-				return fmt.Errorf("Error when reading for `%s`: %s", x.Name, err.Error())
+				err = fmt.Errorf("Error when reading for `%s`: %s", x.Name, err.Error())
+				break
 			}
 			if _, err := buf.Buf.Write(w.buffer[:read]); err != nil {
-				return fmt.Errorf("Error writing data for `%s`: %s", x.Name, err.Error())
+				err = fmt.Errorf("Error writing data for `%s`: %s", x.Name, err.Error())
+				break
 			}
 			left -= read
 		}
 	} else { // Protocol 1
 		if _, err := x.Conn.Write(protocol1Header); err != nil {
+			buf.Lock.Unlock()
 			return fmt.Errorf("Failed to set protocol for %s: %s", x.Name, err)
-
 		}
 		w.conn.SetConn(x.Conn)
 		w.scanner.SetReader(w.conn)
@@ -123,7 +128,7 @@ func (dp *DumpPool) dump(x DumpJob, w *worker) (err error) {
 				if line[0] == '.' {
 					ws := true
 					for i := 1; i < len(line); i++ {
-						if line[i] == '\r' || line[i] == '\n' {
+						if line[i] != '\r' && line[i] != '\n' {
 							ws = false
 							break
 						}
@@ -136,9 +141,17 @@ func (dp *DumpPool) dump(x DumpJob, w *worker) (err error) {
 			}
 
 			if _, err := buf.Buf.Write(line); err != nil {
-				return fmt.Errorf("Failed to write into buffer for %s: %s", x.Name, err)
+				err = fmt.Errorf("Failed to write into buffer for %s: %s", x.Name, err)
+				break
 			}
 		}
+	}
+	buf.Lock.Unlock()
+	if err != nil {
+		if _, nerr := x.Conn.Write(errMsg); nerr != nil {
+			logging.Error("Failed to signal error to tailer of %s: %s", x.Name, nerr)
+		}
+		return err
 	}
 	if _, err := x.Conn.Write(okMsg); err != nil {
 		return fmt.Errorf("Failed to confirm successful read to the tailer for %s: %s", x.Name, err)
