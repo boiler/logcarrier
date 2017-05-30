@@ -39,10 +39,12 @@ func NewLogrotatePool(netjobs chan LogrotateJob, files *FileOp, timeout time.Dur
 
 // Stop command jobs to stop
 func (lr *LogrotatePool) Stop() {
+	logging.Info("Stopping log rotating jobs")
 	for i := 0; i < lr.jobsCounter; i++ {
 		lr.stopQueue <- 0
 	}
 	lr.wg.Wait()
+	logging.Info("Done")
 }
 
 // Spawn spawns a worker

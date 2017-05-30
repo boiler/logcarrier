@@ -45,10 +45,12 @@ func NewDumpPool(netjobs chan DumpJob, files *FileOp, timeout time.Duration) *Du
 
 // Stop command jobs to stop
 func (dp *DumpPool) Stop() {
+	logging.Info("Stopping dumping jobs")
 	for i := 0; i < dp.jobsCounter; i++ {
 		dp.stopQueue <- 0
 	}
 	dp.wg.Wait()
+	logging.Info("Done")
 }
 
 type worker struct {

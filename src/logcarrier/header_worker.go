@@ -57,10 +57,12 @@ func NewHeaderPool(
 
 // Stop stop the job pool
 func (hp *HeaderPool) Stop() {
+	logging.Info("Stopping routing jobs")
 	for i := 0; i < hp.jobsCounter; i++ {
 		hp.stopQueue <- 0
 	}
 	hp.wg.Wait()
+	logging.Info("Done")
 }
 
 // Spawn spawns a job

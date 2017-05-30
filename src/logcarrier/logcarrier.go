@@ -3,6 +3,7 @@ package main
 import (
 	"bufferer"
 	"fileio"
+	"flag"
 	"fmt"
 	"frameio"
 	"logging"
@@ -20,7 +21,10 @@ import (
 )
 
 func main() {
-	cfg := LoadConfig("/home/emacs/Sources/logcarrier/test.toml")
+	cfgPath := flag.String("c", "/usr/local/etc/logcarrier.toml", "configuration file path")
+	flag.Parse()
+
+	cfg := LoadConfig(*cfgPath)
 
 	if len(cfg.LogFile) > 0 {
 		loggingConfig := logging.NewConfig()
@@ -166,10 +170,7 @@ sigloop:
 	// Stopping services
 	ticker.Stop()
 	fileops.Join()
-	logging.Info("Should top the headerpool now")
 	headerpool.Stop()
-	logging.Info("Should top the dumppool now")
 	dumppool.Stop()
-	logging.Info("Should top the rotatepool now")
 	rotatepool.Stop()
 }
