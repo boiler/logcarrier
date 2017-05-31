@@ -4,7 +4,11 @@ package bufferer provides
 
 package bufferer
 
-import "bytes"
+import (
+	"bindec"
+	"binenc"
+	"bytes"
+)
 
 // Bufferer is an interface that groups set of methods that are
 // needed for files syncing and log rotating
@@ -18,12 +22,16 @@ type Bufferer interface {
 	// Flush flushes all buffered data
 	Flush() error
 
+	// PostWrite this differs for different purposes. Say, this will flush
+	// the front buffer for the zstd and will do nothing for raw
+	PostWrite() error
+
 	// Logrotate rotates underlying log
 	Logrotate(newname string) error
 
 	// DumpState dumps the state of the bufferer object
-	DumpState() (*bytes.Buffer, error)
+	DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer)
 
 	// RestoreState restores the state of the bufferer object
-	RestoreState(*bytes.Buffer) error
+	RestoreState(src *bindec.ResponseReader)
 }

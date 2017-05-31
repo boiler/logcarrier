@@ -1,6 +1,8 @@
 package bufferer
 
 import (
+	"bindec"
+	"binenc"
 	"bytes"
 	"fileio"
 	"logio"
@@ -23,6 +25,11 @@ func NewRawBufferer(l *logio.Writer, d *fileio.File) *RawBufferer {
 // Write implementation
 func (b *RawBufferer) Write(p []byte) (n int, err error) {
 	return b.l.Write(p)
+}
+
+// PostWrite implementation
+func (b *RawBufferer) PostWrite() error {
+	return b.l.Flush()
 }
 
 // Close implementation
@@ -52,11 +59,13 @@ func (b *RawBufferer) Logrotate(newpath string) error {
 }
 
 // DumpState implementation
-func (b *RawBufferer) DumpState() (*bytes.Buffer, error) {
-	panic("not implemented")
+func (b *RawBufferer) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+	b.l.DumpState(enc, dest)
+	b.d.DumpState(enc, dest)
 }
 
 // RestoreState implementation
-func (b *RawBufferer) RestoreState(*bytes.Buffer) error {
-	panic("not implemented")
+func (b *RawBufferer) RestoreState(src *bindec.ResponseReader) {
+	b.l.RestoreState(src)
+	b.l.RestoreState(src)
 }

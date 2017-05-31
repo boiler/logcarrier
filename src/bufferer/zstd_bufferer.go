@@ -1,6 +1,8 @@
 package bufferer
 
 import (
+	"bindec"
+	"binenc"
 	"bytes"
 	"fileio"
 	"frameio"
@@ -31,6 +33,11 @@ func NewZSTDBufferer(l *logio.Writer, c *ZSTDWriter, f *frameio.Writer, d *filei
 // Write implementation
 func (b *ZSTDBufferer) Write(p []byte) (n int, err error) {
 	return b.l.Write(p)
+}
+
+// PostWrite implementation
+func (b *ZSTDBufferer) PostWrite() error {
+	return b.l.Flush()
 }
 
 // Close implementation
@@ -71,14 +78,15 @@ func (b *ZSTDBufferer) Flush() error {
 // Logrotate implementation
 func (b *ZSTDBufferer) Logrotate(newpath string) error {
 	return b.d.Logrotate(newpath)
+
 }
 
 // DumpState implementation
-func (b *ZSTDBufferer) DumpState() (*bytes.Buffer, error) {
-	panic("not implemented")
+func (b *ZSTDBufferer) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+	b.l.DumpState(enc, dest)
 }
 
 // RestoreState implementation
-func (b *ZSTDBufferer) RestoreState(*bytes.Buffer) error {
-	panic("not implemented")
+func (b *ZSTDBufferer) RestoreState(src *bindec.ResponseReader) {
+	b.l.RestoreState(src)
 }

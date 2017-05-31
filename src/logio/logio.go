@@ -49,6 +49,8 @@ func NewWriter(writer io.Writer) *Writer {
 }
 
 // NewWriterSize returns a new writer whose buffer has at least specified size
+// size. It if is less than a zero it  will have an "infinite" buffer, i.e. it will
+// collect data until manually flushed or closed
 func NewWriterSize(writer io.Writer, size int) *Writer {
 	res := &Writer{
 		bufsize:       size,
