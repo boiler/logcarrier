@@ -5,6 +5,9 @@ package fileio
 package fileio
 
 import (
+	"bindec"
+	"binenc"
+	"bytes"
 	"fmt"
 	"os"
 	"utils"
@@ -42,10 +45,15 @@ func OpenFile(root Root, fpath string, flags int, mode os.FileMode) (*File, erro
 	}, nil
 }
 
+func (f *File) open() (err error) {
+	f.file, err = f.root.OpenFile(f.fpath, f.flags, f.mode)
+	return
+}
+
 // Write ...
 func (f *File) Write(p []byte) (n int, err error) {
 	if f.file == nil {
-		if f.file, err = f.root.OpenFile(f.fpath, f.flags, f.mode); err != nil {
+		if err = f.open(); err != nil {
 			return
 		}
 	}
@@ -74,4 +82,30 @@ func (f *File) Logrotate(newpath string) error {
 	}
 	err := os.Rename(f.root.Path(f.fpath), f.root.Path(newpath))
 	return err
+}
+
+// DumpState ...
+func (f *File) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+	if f.file == nil {
+		if err := f.open(); err != nil {
+			panic(err)
+		}
+	}
+	pos, err := f.file.Seek(0, os.SEEK_CUR)
+	if err != nil {
+		panic(err)
+	}
+	dest.Write(enc.Int64(pos))
+}
+
+// RestoreState ...
+func (f *File) RestoreState(src *bindec.ResponseReader) {
+	pos, ok := src.Int64()
+	if !ok {
+		panic("Cannot restore position in the file")
+	}
+	err := f.file.Truncate(pos)
+	if err != nil {
+		panic(fmt.Errorf("Cannot restore position in the file: %s", err))
+	}
 }
