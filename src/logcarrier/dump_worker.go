@@ -105,6 +105,7 @@ func (dp *DumpPool) dump(x DumpJob, w *worker, e *binenc.Encoder, d *bindec.Deco
 	}
 	buf.Lock.Lock()
 	dest := dp.pool.Get().(*bytes.Buffer)
+	dest.Reset()
 	buf.Buf.DumpState(e, dest)
 	err = dp.communicate(x, w, buf.Buf)
 	if err != nil {
