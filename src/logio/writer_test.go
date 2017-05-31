@@ -63,3 +63,20 @@ func TestWriterChunks2(t *testing.T) {
 	}
 	require.Equal(t, data, buf.String())
 }
+
+func TestInfty(t *testing.T) {
+	buf := &bytes.Buffer{}
+	data := []byte("12345\n")
+	w := NewWriterSize(buf, -1)
+	for i := 0; i < 6000000; i++ {
+		_, err := w.Write(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	require.Equal(t, 0, buf.Len())
+	if err := w.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	require.Equal(t, 36000000, buf.Len())
+}

@@ -41,8 +41,6 @@ type Writer struct {
 	prevLineCount  int
 
 	worthFlushing bool
-
-	enc *binenc.BinaryEncoder
 }
 
 // NewWriter returns a new writer whose buffer has the default size
@@ -59,10 +57,10 @@ func NewWriterSize(writer io.Writer, size int) *Writer {
 		linebuf:       &bytes.Buffer{},
 		finished:      true,
 		worthFlushing: true,
-
-		enc: binenc.New(),
 	}
-	res.buffer.Grow(size)
+	if size > 0 {
+		res.buffer.Grow(size)
+	}
 	res.linebuf.Grow(8192)
 	return res
 }
@@ -117,11 +115,13 @@ func (w *Writer) Write(data []byte) (nn int, err error) {
 			line = w.linebuf.Bytes()
 			w.linebuf.Reset()
 		}
-		if w.buffer.Len()+len(line) > w.bufsize {
-			w.worthFlushing = false
-			err = w.Flush()
-			if err != nil {
-				return nn, err
+		if w.bufsize > 0 {
+			if w.buffer.Len()+len(line) > w.bufsize {
+				w.worthFlushing = false
+				err = w.Flush()
+				if err != nil {
+					return nn, err
+				}
 			}
 		}
 		_, err = w.buffer.Write(line)
@@ -155,59 +155,58 @@ func (w *Writer) WorthFlushing() bool {
 }
 
 // DumpState ...
-func (w *Writer) DumpState(dest *bytes.Buffer) {
-	dest.Write(w.enc.Uint32(uint32(w.bufsize)))
-	dest.Write(w.enc.Uint32(uint32(w.buffer.Len())))
+func (w *Writer) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+	dest.Write(enc.Uint32(uint32(w.bufsize)))
+	dest.Write(enc.Uint32(uint32(w.buffer.Len())))
 	dest.Write(w.buffer.Bytes())
-	dest.Write(w.enc.Uint32(uint32(w.linebuf.Len())))
+	dest.Write(enc.Uint32(uint32(w.linebuf.Len())))
 	dest.Write(w.linebuf.Bytes())
-	dest.Write(w.enc.Bool(w.finished))
-	dest.Write(w.enc.Uint32(uint32(w.lineCount)))
-	dest.Write(w.enc.Uint32(uint32(w.savedLineCount)))
-	dest.Write(w.enc.Uint32(uint32(w.prevLineCount)))
-	dest.Write(w.enc.Bool(w.worthFlushing))
+	dest.Write(enc.Bool(w.finished))
+	dest.Write(enc.Uint32(uint32(w.lineCount)))
+	dest.Write(enc.Uint32(uint32(w.savedLineCount)))
+	dest.Write(enc.Uint32(uint32(w.prevLineCount)))
+	dest.Write(enc.Bool(w.worthFlushing))
 }
 
 // RestoreState ...
-func (w *Writer) RestoreState(src *bytes.Buffer) {
-	rr := bindec.New(src.Bytes())
-	bufsize, ok := rr.Uint32()
+func (w *Writer) RestoreState(src *bindec.ResponseReader) {
+	bufsize, ok := src.Uint32()
 	if !ok {
 		panic("Cannot restore bufsize")
 	}
-	buflen, ok := rr.Uint32()
+	buflen, ok := src.Uint32()
 	if !ok {
 		panic("Cannot restore buffer length")
 	}
-	buffer, ok := rr.Bytes(int(buflen))
+	buffer, ok := src.Bytes(int(buflen))
 	if !ok {
 		panic("Cannot restore a buffer")
 	}
-	linebuflen, ok := rr.Uint32()
+	linebuflen, ok := src.Uint32()
 	if !ok {
 		panic("Cannot restore line buffer length")
 	}
-	linebuf, ok := rr.Bytes(int(linebuflen))
+	linebuf, ok := src.Bytes(int(linebuflen))
 	if !ok {
 		panic("Cannot restore line buffer")
 	}
-	finished, ok := rr.Bool()
+	finished, ok := src.Bool()
 	if !ok {
 		panic("Cannot restore finished state")
 	}
-	linecount, ok := rr.Uint32()
+	linecount, ok := src.Uint32()
 	if !ok {
 		panic("Cannot restore line count")
 	}
-	savedlinecount, ok := rr.Uint32()
+	savedlinecount, ok := src.Uint32()
 	if !ok {
 		panic("Cannot restore saved line count")
 	}
-	prevlinecount, ok := rr.Uint32()
+	prevlinecount, ok := src.Uint32()
 	if !ok {
 		panic("Cannot restore prev(ious) line count")
 	}
-	worthflushing, ok := rr.Bool()
+	worthflushing, ok := src.Bool()
 	if !ok {
 		panic("Cannot restore worthflushing state")
 	}
