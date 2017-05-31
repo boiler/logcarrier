@@ -18,7 +18,8 @@ func New(src []byte) *ResponseReader {
 }
 
 func (rr *ResponseReader) take(b int) (res []byte, ok bool) {
-	if len(rr.src) < b {
+	ok = len(rr.src) >= b
+	if !ok {
 		return nil, false
 	}
 	res = rr.src[:b]
