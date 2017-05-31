@@ -5,19 +5,24 @@ import (
 	"math"
 )
 
-// ResponseReader provides data decoding from RowBinary format
-type ResponseReader struct {
+// Decoder provides data decoding from RowBinary format
+type Decoder struct {
 	src []byte
 }
 
 // New ResponseReader constructor
-func New(src []byte) *ResponseReader {
-	return &ResponseReader{
+func New(src []byte) *Decoder {
+	return &Decoder{
 		src: src,
 	}
 }
 
-func (rr *ResponseReader) take(b int) (res []byte, ok bool) {
+// SetSource sets the source to the given data.
+func (rr *Decoder) SetSource(src []byte) {
+	rr.src = src
+}
+
+func (rr *Decoder) take(b int) (res []byte, ok bool) {
 	ok = len(rr.src) >= b
 	if !ok {
 		return nil, false
@@ -28,7 +33,7 @@ func (rr *ResponseReader) take(b int) (res []byte, ok bool) {
 }
 
 // Float32 reads float32 value
-func (rr *ResponseReader) Float32() (value float32, ok bool) {
+func (rr *Decoder) Float32() (value float32, ok bool) {
 	data, ok := rr.take(4)
 	if !ok {
 		return
@@ -39,7 +44,7 @@ func (rr *ResponseReader) Float32() (value float32, ok bool) {
 }
 
 // Float64 reads float64 value
-func (rr *ResponseReader) Float64() (value float64, ok bool) {
+func (rr *Decoder) Float64() (value float64, ok bool) {
 	data, ok := rr.take(8)
 	if !ok {
 		return
@@ -50,7 +55,7 @@ func (rr *ResponseReader) Float64() (value float64, ok bool) {
 }
 
 // Byte reads byte value
-func (rr *ResponseReader) Byte() (value byte, ok bool) {
+func (rr *Decoder) Byte() (value byte, ok bool) {
 	data, ok := rr.take(1)
 	if !ok {
 		return
@@ -59,7 +64,7 @@ func (rr *ResponseReader) Byte() (value byte, ok bool) {
 }
 
 // Int16 reads int16 value
-func (rr *ResponseReader) Int16() (value int16, ok bool) {
+func (rr *Decoder) Int16() (value int16, ok bool) {
 	data, ok := rr.take(2)
 	if !ok {
 		return
@@ -69,7 +74,7 @@ func (rr *ResponseReader) Int16() (value int16, ok bool) {
 }
 
 // Int32 reads int32 value
-func (rr *ResponseReader) Int32() (value int32, ok bool) {
+func (rr *Decoder) Int32() (value int32, ok bool) {
 	data, ok := rr.take(4)
 	if !ok {
 		return
@@ -79,7 +84,7 @@ func (rr *ResponseReader) Int32() (value int32, ok bool) {
 }
 
 // Int64 reads int64 value
-func (rr *ResponseReader) Int64() (value int64, ok bool) {
+func (rr *Decoder) Int64() (value int64, ok bool) {
 	data, ok := rr.take(8)
 	if !ok {
 		return
@@ -89,7 +94,7 @@ func (rr *ResponseReader) Int64() (value int64, ok bool) {
 }
 
 // Uint16 reads uint16 value
-func (rr *ResponseReader) Uint16() (value uint16, ok bool) {
+func (rr *Decoder) Uint16() (value uint16, ok bool) {
 	data, ok := rr.take(2)
 	if !ok {
 		return
@@ -99,7 +104,7 @@ func (rr *ResponseReader) Uint16() (value uint16, ok bool) {
 }
 
 // Uint32 reads uint32 value
-func (rr *ResponseReader) Uint32() (value uint32, ok bool) {
+func (rr *Decoder) Uint32() (value uint32, ok bool) {
 	data, ok := rr.take(4)
 	if !ok {
 		return
@@ -109,7 +114,7 @@ func (rr *ResponseReader) Uint32() (value uint32, ok bool) {
 }
 
 // Uint64 reads uint64 value
-func (rr *ResponseReader) Uint64() (value uint64, ok bool) {
+func (rr *Decoder) Uint64() (value uint64, ok bool) {
 	data, ok := rr.take(8)
 	if !ok {
 		return
@@ -119,7 +124,7 @@ func (rr *ResponseReader) Uint64() (value uint64, ok bool) {
 }
 
 // Bool reads boolan value
-func (rr *ResponseReader) Bool() (value bool, ok bool) {
+func (rr *Decoder) Bool() (value bool, ok bool) {
 	data, ok := rr.take(1)
 	if !ok {
 		return
@@ -131,7 +136,7 @@ func (rr *ResponseReader) Bool() (value bool, ok bool) {
 }
 
 // Bytes reads n bytes from the source
-func (rr *ResponseReader) Bytes(n int) (value []byte, ok bool) {
+func (rr *Decoder) Bytes(n int) (value []byte, ok bool) {
 	value, ok = rr.take(n)
 	if !ok {
 		return
@@ -140,6 +145,6 @@ func (rr *ResponseReader) Bytes(n int) (value []byte, ok bool) {
 }
 
 // Empty checks if the underlying buffer is empty
-func (rr *ResponseReader) Empty() bool {
+func (rr *Decoder) Empty() bool {
 	return len(rr.src) == 0
 }

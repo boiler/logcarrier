@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bindec"
+	"binenc"
+	"bufferer"
+	"bytes"
 	"cheapbuf"
 	"connio"
 	"fmt"
@@ -31,6 +35,7 @@ type DumpPool struct {
 	wg          *sync.WaitGroup
 	waitTimeout time.Duration
 	stopQueue   chan int
+	pool        *sync.Pool
 }
 
 // NewDumpPool constructor
@@ -41,6 +46,9 @@ func NewDumpPool(netjobs chan DumpJob, files *FileOp, timeout time.Duration) *Du
 		stopQueue:   make(chan int),
 		waitTimeout: timeout,
 		wg:          &sync.WaitGroup{},
+		pool: &sync.Pool{
+			New: func() interface{} { return &bytes.Buffer{} },
+		},
 	}
 }
 
@@ -70,10 +78,12 @@ func (dp *DumpPool) Spawn() {
 			scanner: cheapbuf.NewScanner(cheapbuf.NewReaderSize(8129)),
 			conn:    connio.NewReader(dp.waitTimeout),
 		}
+		enc := binenc.New()
+		dec := bindec.New(nil)
 		for {
 			select {
 			case x := <-dp.netjobs:
-				if err := dp.dump(x, w); err != nil {
+				if err := dp.dump(x, w, enc, dec); err != nil {
 					logging.Error("DUMPING: %s", err)
 				}
 				if err := x.Conn.Close(); err != nil {
@@ -88,42 +98,59 @@ func (dp *DumpPool) Spawn() {
 	}()
 }
 
-func (dp *DumpPool) dump(x DumpJob, w *worker) (err error) {
+func (dp *DumpPool) dump(x DumpJob, w *worker, e *binenc.Encoder, d *bindec.Decoder) (err error) {
 	buf, err := dp.files.GetFile(x.Name)
 	if err != nil {
 		return
 	}
 	buf.Lock.Lock()
+	dest := dp.pool.Get().(*bytes.Buffer)
+	buf.Buf.DumpState(e, dest)
+	err = dp.communicate(x, w, buf.Buf)
+	if err != nil {
+		d.SetSource(dest.Bytes())
+		buf.Buf.RestoreState(d)
+	}
+	dp.pool.Put(dest)
+	buf.Lock.Unlock()
+	if err != nil {
+		if _, nerr := x.Conn.Write(errMsg); nerr != nil {
+			logging.Error("Failed to signal error to tailer of %s: %s", x.Name, nerr)
+		}
+		return err
+	}
+	if _, err := x.Conn.Write(okMsg); err != nil {
+		return fmt.Errorf("Failed to confirm successful read to the tailer for %s: %s", x.Name, err)
+	}
+	return nil
+}
+
+func (dp *DumpPool) communicate(x DumpJob, w *worker, buf bufferer.Bufferer) (err error) {
 	left := x.Size
 	if x.Size > 0 { // Protocol 2
-		if _, err := x.Conn.Write(protocol2Header); err != nil {
-			buf.Lock.Unlock()
-			return fmt.Errorf("Failed to set a protocol for  %s: %s", x.Name, err)
+		if _, err = x.Conn.Write(protocol2Header); err != nil {
+			return fmt.Errorf("Failed to start protocol 2 for %s: %s", x.Name, err)
 		}
 		w.conn.SetConn(x.Conn)
 		for left > 0 {
 			read, err := w.conn.Read(w.buffer)
 			if err != nil {
-				err = fmt.Errorf("Error when reading for `%s`: %s", x.Name, err.Error())
-				break
+				return fmt.Errorf("Error when reading data (protocol 2) %s: %s", x.Name, err)
 			}
-			if _, err := buf.Buf.Write(w.buffer[:read]); err != nil {
-				err = fmt.Errorf("Error writing data for `%s`: %s", x.Name, err.Error())
-				break
+			if _, err = buf.Write(w.buffer[:read]); err != nil {
+				return fmt.Errorf("Error writing retrieved data for %s: %s", x.Name, err)
 			}
 			left -= read
 		}
 	} else { // Protocol 1
-		if _, err := x.Conn.Write(protocol1Header); err != nil {
-			buf.Lock.Unlock()
-			return fmt.Errorf("Failed to set protocol for %s: %s", x.Name, err)
+		if _, err = x.Conn.Write(protocol1Header); err != nil {
+			return fmt.Errorf("Failed to start protocol 1 for %s: %s", x.Name, err)
 		}
 		w.conn.SetConn(x.Conn)
 		w.scanner.SetReader(w.conn)
 		for w.scanner.Scan() {
 			line := w.scanner.Bytes()
 
-			// Check if line is the last one
 			if len(line) > 1 {
 				if line[0] == '.' {
 					ws := true
@@ -139,22 +166,10 @@ func (dp *DumpPool) dump(x DumpJob, w *worker) (err error) {
 					line = line[1:]
 				}
 			}
-
-			if _, err := buf.Buf.Write(line); err != nil {
-				err = fmt.Errorf("Failed to write into buffer for %s: %s", x.Name, err)
-				break
+			if _, err = buf.Write(line); err != nil {
+				return fmt.Errorf("Error writing retrieved data for %s: %s", x.Name, err)
 			}
 		}
 	}
-	buf.Lock.Unlock()
-	if err != nil {
-		if _, nerr := x.Conn.Write(errMsg); nerr != nil {
-			logging.Error("Failed to signal error to tailer of %s: %s", x.Name, nerr)
-		}
-		return err
-	}
-	if _, err := x.Conn.Write(okMsg); err != nil {
-		return fmt.Errorf("Failed to confirm successful read to the tailer for %s: %s", x.Name, err)
-	}
-	return nil
+	return buf.PostWrite()
 }

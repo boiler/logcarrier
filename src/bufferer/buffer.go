@@ -30,8 +30,8 @@ type Bufferer interface {
 	Logrotate(newname string) error
 
 	// DumpState dumps the state of the bufferer object
-	DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer)
+	DumpState(enc *binenc.Encoder, dest *bytes.Buffer)
 
 	// RestoreState restores the state of the bufferer object
-	RestoreState(src *bindec.ResponseReader)
+	RestoreState(src *bindec.Decoder)
 }

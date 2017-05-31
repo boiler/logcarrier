@@ -37,7 +37,10 @@ func (b *ZSTDBufferer) Write(p []byte) (n int, err error) {
 
 // PostWrite implementation
 func (b *ZSTDBufferer) PostWrite() error {
-	return b.l.Flush()
+	if b.l.OvergrownExtra(nil) {
+		return b.l.Flush()
+	}
+	return nil
 }
 
 // Close implementation
@@ -82,11 +85,11 @@ func (b *ZSTDBufferer) Logrotate(newpath string) error {
 }
 
 // DumpState implementation
-func (b *ZSTDBufferer) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+func (b *ZSTDBufferer) DumpState(enc *binenc.Encoder, dest *bytes.Buffer) {
 	b.l.DumpState(enc, dest)
 }
 
 // RestoreState implementation
-func (b *ZSTDBufferer) RestoreState(src *bindec.ResponseReader) {
+func (b *ZSTDBufferer) RestoreState(src *bindec.Decoder) {
 	b.l.RestoreState(src)
 }

@@ -85,7 +85,7 @@ func (f *File) Logrotate(newpath string) error {
 }
 
 // DumpState ...
-func (f *File) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+func (f *File) DumpState(enc *binenc.Encoder, dest *bytes.Buffer) {
 	if f.file == nil {
 		if err := f.open(); err != nil {
 			panic(err)
@@ -99,7 +99,7 @@ func (f *File) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
 }
 
 // RestoreState ...
-func (f *File) RestoreState(src *bindec.ResponseReader) {
+func (f *File) RestoreState(src *bindec.Decoder) {
 	pos, ok := src.Int64()
 	if !ok {
 		panic("Cannot restore position in the file")

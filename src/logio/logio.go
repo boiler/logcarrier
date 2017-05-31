@@ -39,6 +39,7 @@ type Writer struct {
 	lineCount      int
 	savedLineCount int
 	prevLineCount  int
+	avoidFlushing  bool
 
 	worthFlushing bool
 }
@@ -59,11 +60,18 @@ func NewWriterSize(writer io.Writer, size int) *Writer {
 		linebuf:       &bytes.Buffer{},
 		finished:      true,
 		worthFlushing: true,
+		avoidFlushing: false,
 	}
-	if size > 0 {
-		res.buffer.Grow(size)
-	}
+	res.buffer.Grow(size)
 	res.linebuf.Grow(8192)
+	return res
+}
+
+// NewBlowingWriter returns a writer same as NewWriterSize and it also disables regular
+// flushing recommendation (use WorthFlushingExtra to override it)
+func NewBlowingWriter(writer io.Writer, size int) *Writer {
+	res := NewWriterSize(writer, size)
+	res.avoidFlushing = true
 	return res
 }
 
@@ -118,7 +126,7 @@ func (w *Writer) Write(data []byte) (nn int, err error) {
 			w.linebuf.Reset()
 		}
 		if w.bufsize > 0 {
-			if w.buffer.Len()+len(line) > w.bufsize {
+			if w.Overgrown(line) {
 				w.worthFlushing = false
 				err = w.Flush()
 				if err != nil {
@@ -148,7 +156,7 @@ func (w *Writer) LinesWritten() int {
 	return w.savedLineCount
 }
 
-// WorthFlushing checks if any write was done after the last check
+// WorthFlushing checks if any write was done after the last check and avoidFlushing is set to false
 func (w *Writer) WorthFlushing() bool {
 	res := w.worthFlushing && w.savedLineCount != w.lineCount && w.savedLineCount == w.prevLineCount
 	w.prevLineCount = w.savedLineCount
@@ -156,8 +164,18 @@ func (w *Writer) WorthFlushing() bool {
 	return res
 }
 
+// Overgrown checks if buffered data exceeded recommended buffer limit and flushing is accepted
+func (w *Writer) Overgrown(line []byte) bool {
+	return w.buffer.Len()+len(line) > w.bufsize && !w.avoidFlushing
+}
+
+// OvergrownExtra checks if buffered data  exceeded recommended buffer and puts no attention to flushing acceptance
+func (w *Writer) OvergrownExtra(line []byte) bool {
+	return w.buffer.Len()+len(line) > w.bufsize
+}
+
 // DumpState ...
-func (w *Writer) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+func (w *Writer) DumpState(enc *binenc.Encoder, dest *bytes.Buffer) {
 	dest.Write(enc.Uint32(uint32(w.bufsize)))
 	dest.Write(enc.Uint32(uint32(w.buffer.Len())))
 	dest.Write(w.buffer.Bytes())
@@ -168,10 +186,11 @@ func (w *Writer) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
 	dest.Write(enc.Uint32(uint32(w.savedLineCount)))
 	dest.Write(enc.Uint32(uint32(w.prevLineCount)))
 	dest.Write(enc.Bool(w.worthFlushing))
+	dest.Write(enc.Bool(w.avoidFlushing))
 }
 
 // RestoreState ...
-func (w *Writer) RestoreState(src *bindec.ResponseReader) {
+func (w *Writer) RestoreState(src *bindec.Decoder) {
 	bufsize, ok := src.Uint32()
 	if !ok {
 		panic("Cannot restore bufsize")
@@ -212,6 +231,10 @@ func (w *Writer) RestoreState(src *bindec.ResponseReader) {
 	if !ok {
 		panic("Cannot restore worthflushing state")
 	}
+	avoidflushing, ok := src.Bool()
+	if !ok {
+		panic("Cannot restore avoidflushing state")
+	}
 
 	w.bufsize = int(bufsize)
 	w.buffer.Reset()
@@ -223,4 +246,5 @@ func (w *Writer) RestoreState(src *bindec.ResponseReader) {
 	w.savedLineCount = int(savedlinecount)
 	w.prevLineCount = int(prevlinecount)
 	w.worthFlushing = worthflushing
+	w.avoidFlushing = avoidflushing
 }

@@ -1,5 +1,5 @@
 [compression]
-method="raw"
+method="zstd"
 level=6
 
 [buffers]

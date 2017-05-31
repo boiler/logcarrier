@@ -59,13 +59,13 @@ func (b *RawBufferer) Logrotate(newpath string) error {
 }
 
 // DumpState implementation
-func (b *RawBufferer) DumpState(enc *binenc.BinaryEncoder, dest *bytes.Buffer) {
+func (b *RawBufferer) DumpState(enc *binenc.Encoder, dest *bytes.Buffer) {
 	b.l.DumpState(enc, dest)
 	b.d.DumpState(enc, dest)
 }
 
 // RestoreState implementation
-func (b *RawBufferer) RestoreState(src *bindec.ResponseReader) {
+func (b *RawBufferer) RestoreState(src *bindec.Decoder) {
 	b.l.RestoreState(src)
 	b.l.RestoreState(src)
 }
