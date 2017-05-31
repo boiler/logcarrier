@@ -4,6 +4,7 @@ import (
 	"bufferer"
 	"fmt"
 	"logging"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -21,7 +22,7 @@ type Buf struct {
 type FileOp struct {
 	items     map[string]Buf
 	itemsLock *sync.Mutex
-	factory   func(string) (bufferer.Bufferer, error) // Generates bufferer for a given key
+	factory   func(string, string, string) (bufferer.Bufferer, error) // Generates bufferer for a given key
 
 	ticker      *time.Ticker
 	stopChannel chan int
@@ -30,7 +31,7 @@ type FileOp struct {
 // NewFileOp generates file service
 //   factory creates bufferer object
 //   ticker is used to generate
-func NewFileOp(factory func(string) (bufferer.Bufferer, error), ticker *time.Ticker) *FileOp {
+func NewFileOp(factory func(string, string, string) (bufferer.Bufferer, error), ticker *time.Ticker) *FileOp {
 	res := &FileOp{
 		items:       make(map[string]Buf),
 		itemsLock:   &sync.Mutex{},
@@ -100,31 +101,37 @@ duration: %s`,
 	return res
 }
 
+func fileKey(dir, name, group string) string {
+	return filepath.Clean(filepath.Join(dir, name, group))
+}
+
 // GetFile retrieves Buf
-func (f *FileOp) GetFile(name string) (res Buf, err error) {
+func (f *FileOp) GetFile(dir, name, group string) (res Buf, err error) {
 	f.itemsLock.Lock()
-	buf, ok := f.items[name]
+	key := fileKey(dir, name, group)
+	buf, ok := f.items[key]
 	if !ok {
-		b, err := f.factory(name)
+		b, err := f.factory(dir, name, group)
 		if err != nil {
 			f.itemsLock.Unlock()
 			return res, err
 		}
 		buf = Buf{
-			Name: name,
+			Name: key,
 			Lock: &trylock.Mutex{},
 			Buf:  b,
 		}
-		f.items[name] = buf
+		f.items[key] = buf
 	}
 	f.itemsLock.Unlock()
 	return buf, nil
 }
 
 // Logrotate obviously logrotates file
-func (f *FileOp) Logrotate(name, newpath string) (err error) {
+func (f *FileOp) Logrotate(dir, name, group string) (err error) {
 	f.itemsLock.Lock()
-	buf, ok := f.items[name]
+	key := fileKey(dir, name, group)
+	buf, ok := f.items[key]
 	f.itemsLock.Unlock()
 	if !ok {
 		return fmt.Errorf("file `%s` not found", name)
@@ -133,7 +140,7 @@ func (f *FileOp) Logrotate(name, newpath string) (err error) {
 	if err := buf.Buf.Close(); err != nil {
 		goto exit
 	}
-	err = buf.Buf.Logrotate(newpath)
+	err = buf.Buf.Logrotate()
 
 exit:
 	buf.Lock.Unlock()

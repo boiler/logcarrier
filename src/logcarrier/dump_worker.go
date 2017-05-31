@@ -21,9 +21,11 @@ var errMsg = []byte("400 Error\n")
 
 // DumpJob connection with tailed data
 type DumpJob struct {
-	Name string   // Name of the file
-	Conn net.Conn // Socket
-	Size int      // Bytes to read (-1 for unknown)
+	Dir   string //
+	Name  string // Name of the file
+	Group string
+	Conn  net.Conn // Socket
+	Size  int      // Bytes to read (-1 for unknown)
 }
 
 // DumpPool spawns workers what read incoming data from tailers
@@ -99,7 +101,7 @@ func (dp *DumpPool) Spawn() {
 }
 
 func (dp *DumpPool) dump(x DumpJob, w *worker, e *binenc.Encoder, d *bindec.Decoder) (err error) {
-	buf, err := dp.files.GetFile(x.Name)
+	buf, err := dp.files.GetFile(x.Dir, x.Name, x.Group)
 	if err != nil {
 		return
 	}

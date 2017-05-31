@@ -12,9 +12,10 @@ var doneLogRotate = []byte("200 DONE\n")
 
 // LogrotateJob shows what file to rotate
 type LogrotateJob struct {
-	Name    string
-	Newpath string
-	Conn    net.Conn
+	Dir   string
+	Name  string
+	Group string
+	Conn  net.Conn
 }
 
 // LogrotatePool spawn workers what rotates log
@@ -55,14 +56,14 @@ func (lr *LogrotatePool) Spawn() {
 		for {
 			select {
 			case x := <-lr.netjobs:
-				err := lr.files.Logrotate(x.Name, x.Newpath)
+				err := lr.files.Logrotate(x.Dir, x.Name, x.Group)
 				if err != nil {
 					logging.Error("LOGROTATER: %s", err)
 					if _, err := x.Conn.Write(errorLogRotate); err != nil {
 						logging.Error("LOGROTATER: %s", err)
 					}
 				} else {
-					logging.Error("LOGROTATER: moved %s => %s", x.Name, x.Newpath)
+					logging.Error("LOGROTATER: rotating %s", x.Name)
 					if _, err := x.Conn.Write(doneLogRotate); err != nil {
 						logging.Error("LOGROTATER: %s", err)
 					}

@@ -10,43 +10,75 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
+	"paths"
+	"time"
 	"utils"
 )
 
 // File object that is steady against rotating.
 type File struct {
-	flags int
-	mode  os.FileMode
-	root  Root
+	namegen paths.Paths
+	linkgen paths.Paths
+	dirmode os.FileMode
 
-	fpath string
+	fname string
+	link  string
+
+	dir   string
+	name  string
+	group string
 
 	file *os.File
+	time time.Time
 }
 
-// Open opens a file with default flags and mode
-func Open(root Root, fpath string) (*File, error) {
-	return OpenFile(root, fpath, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0644))
-}
+// Open File constructor
+func Open(dir, name, group string, namegen, linkgen paths.Paths, dirmode os.FileMode) (*File, error) {
+	file := &File{
+		namegen: namegen,
+		linkgen: linkgen,
+		dirmode: dirmode,
 
-// OpenFile with given flags and mode
-func OpenFile(root Root, fpath string, flags int, mode os.FileMode) (*File, error) {
-	file, err := root.OpenFile(fpath, flags, mode)
-	if err != nil {
-		return nil, err
+		dir:   dir,
+		name:  name,
+		group: group,
 	}
-	return &File{
-		flags: flags,
-		mode:  mode,
-		fpath: fpath,
-		root:  root,
-
-		file: file,
-	}, nil
+	err := file.open()
+	return file, err
 }
 
 func (f *File) open() (err error) {
-	f.file, err = f.root.OpenFile(f.fpath, f.flags, f.mode)
+	t := time.Now()
+
+	fname := f.namegen.Name(f.dir, f.name, f.group, t)
+	dirpath, _ := filepath.Split(fname)
+	if err = os.MkdirAll(dirpath, f.dirmode); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(fname, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0644))
+	if err != nil {
+		return
+	}
+
+	lname := f.linkgen.Name(f.dir, f.name, f.group, t)
+	if len(lname) == 0 {
+		return
+	}
+
+	dirpath, _ = filepath.Split(lname)
+	if err = os.MkdirAll(dirpath, f.dirmode); err != nil {
+		return err
+	}
+	if err = os.Symlink(fname, lname); err != nil {
+		_ = file.Close()
+		return
+	}
+
+	f.file = file
+	f.fname = fname
+	f.link = lname
+	f.time = t
 	return
 }
 
@@ -70,18 +102,32 @@ func (f *File) Close() error {
 }
 
 // Logrotate ...
-func (f *File) Logrotate(newpath string) error {
+func (f *File) Logrotate() error {
+	rotname := f.namegen.Rotation(f.dir, f.name, f.group, f.time)
 	if f.file != nil {
-		panic(fmt.Errorf("File `%s` had to be closed before the log rotation into `%s`", newpath, f.fpath))
+		panic(fmt.Errorf("File must be closed before the log rotation `%s`=>`%s`", f.fname, rotname))
 	}
-	if !utils.PathExists(f.root.Path(f.fpath)) {
-		return fmt.Errorf("Can't rename file %s: file not exists", f.fpath)
+	if !utils.PathExists(f.fname) {
+		return fmt.Errorf("Can't rename file %s: file not exists", f.fname)
 	}
-	if utils.PathExists(f.root.Path(newpath)) {
-		return fmt.Errorf("Can't rename file %s => %s: file exists", f.fpath, newpath)
+	if utils.PathExists(rotname) {
+		return fmt.Errorf("Can't rename file %s => %s: file exists", f.fname, rotname)
 	}
-	err := os.Rename(f.root.Path(f.fpath), f.root.Path(newpath))
-	return err
+	if len(f.link) > 0 {
+		if err := os.Remove(f.link); err != nil {
+			return fmt.Errorf("Can't remove symlink %s => %s: %s", f.link, f.fname, err)
+		}
+	}
+	if err := os.Rename(f.fname, rotname); err != nil {
+		return fmt.Errorf("Can't rename file %s => %s: %s", f.fname, rotname, err)
+	}
+	rotlink := f.linkgen.Rotation(f.dir, f.name, f.group, f.time)
+	if len(rotlink) > 0 {
+		if err := os.Symlink(rotname, rotlink); err != nil {
+			return fmt.Errorf("Can't create symlink %s => %s: %s", rotlink, rotname, err)
+		}
+	}
+	return nil
 }
 
 // DumpState ...

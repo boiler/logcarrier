@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"paths"
 	"syscall"
 	"time"
 	"utils"
@@ -33,23 +34,36 @@ func main() {
 		}
 	}
 
-	if !utils.PathExists(cfg.DestDir) {
-		fmt.Fprintf(os.Stderr, "Error: directory %s does not exist\n", cfg.DestDir)
+	if !utils.PathExists(cfg.Files.Root) {
+		fmt.Fprintf(os.Stderr, "Error: directory %s does not exist\n", cfg.Files.Root)
 		os.Exit(1)
+	}
+	if len(cfg.Links.Root) > 0 {
+		if !utils.PathExists(cfg.Links.Root) {
+			fmt.Fprintf(os.Stderr, "Error: directory %s does not exist\n", cfg.Links.Root)
+			os.Exit(1)
+		}
+	}
+
+	fnamegens := paths.NewFiles(cfg.Files.Root, cfg.Files.Rotation)
+	var lnamegens paths.Paths
+	if cfg.Links.enabled {
+		lnamegens = paths.NewLinks(cfg.Links.Root, cfg.Links.Name, cfg.Links.Rotation)
+	} else {
+		lnamegens = paths.Void(true)
 	}
 
 	// Setting up prerequisites
-	root := fileio.NewRoot(utils.PathGen(cfg.DestDir))
 	headerjobs := make(chan HeaderJob, cfg.Buffers.Connections)
 	dumpjobs := make(chan DumpJob, cfg.Buffers.Dumps)
 	rotatejobs := make(chan LogrotateJob, cfg.Buffers.Logrotates)
 
 	// factory creates bufferers what is needed to buffer incoming data
-	var factory func(string) (bufferer.Bufferer, error)
+	var factory func(string, string, string) (bufferer.Bufferer, error)
 	switch cfg.Compression.Method {
 	case ZStd:
-		factory = func(name string) (bufferer.Bufferer, error) {
-			d, err := fileio.Open(root, name)
+		factory = func(dir, name, group string) (bufferer.Bufferer, error) {
+			d, err := fileio.Open(dir, name, group, fnamegens, lnamegens, cfg.Files.RootMode)
 			if err != nil {
 				return nil, err
 			}
@@ -61,8 +75,8 @@ func main() {
 			return bufferer.NewZSTDBufferer(l, c, f, d), nil
 		}
 	case Raw:
-		factory = func(name string) (bufferer.Bufferer, error) {
-			d, err := fileio.Open(root, name)
+		factory = func(dir, name, group string) (bufferer.Bufferer, error) {
+			d, err := fileio.Open(dir, name, group, fnamegens, lnamegens, cfg.Files.RootMode)
 			if err != nil {
 				return nil, err
 			}
@@ -72,16 +86,9 @@ func main() {
 	}
 
 	// Setting up background services
-	rotname := func(name string) string {
-		t := time.Now()
-		return fmt.Sprintf("%s-%d%02d%02d%02d%02d%02d", name, t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
-	}
-	mkdir := func(name string) error {
-		return os.MkdirAll(name, cfg.DestDirMode)
-	}
 	ticker := time.NewTicker(cfg.Workers.FlusherSleep)
 	fileops := NewFileOp(factory, ticker)
-	headerpool := NewHeaderPool(utils.PathGen(cfg.DestDir), rotname, mkdir, headerjobs, dumpjobs, rotatejobs)
+	headerpool := NewHeaderPool(headerjobs, dumpjobs, rotatejobs)
 	dumppool := NewDumpPool(dumpjobs, fileops, cfg.WaitTimeout)
 	rotatepool := NewLogrotatePool(rotatejobs, fileops, cfg.WaitTimeout)
 

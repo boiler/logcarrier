@@ -27,7 +27,7 @@ type Bufferer interface {
 	PostWrite() error
 
 	// Logrotate rotates underlying log
-	Logrotate(newname string) error
+	Logrotate() error
 
 	// DumpState dumps the state of the bufferer object
 	DumpState(enc *binenc.Encoder, dest *bytes.Buffer)
