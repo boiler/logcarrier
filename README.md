@@ -45,6 +45,6 @@ name="/${dir}/${ time | %Y/%m/%d }/${name}-${ time | %H}"      # Name for the li
 rotation="/${dir}/${ time | %Y/%m/%d }/${name}-${ time | %H}"  # Same as for files
 
 [logrotate]
-method="periodic"                  # can be periodic, guided (via protocol) and both
+method="periodic"                  # can be `periodic`, `guided` (via protocol) and `both`
 schedule="* */1 * * *"             # start log rotation tasks at the start of each hour
 ```
