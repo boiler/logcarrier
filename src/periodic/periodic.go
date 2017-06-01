@@ -1,7 +1,7 @@
 package periodic
 
 import (
-	"github.com/robfig/cron"
+	cron "gopkg.in/robfig/cron.v2"
 )
 
 // // Hourly return a channel which is getting an element once an hour
@@ -24,12 +24,12 @@ import (
 func Schedule(sched string) chan int {
 	res := make(chan int, 1024)
 	c := cron.New()
-	err := c.AddFunc(sched, func() {
+	c.Start()
+	_, err := c.AddFunc(sched, func() {
 		res <- 0
 	})
 	if err != nil {
 		panic(err)
 	}
-	go c.Start()
 	return res
 }

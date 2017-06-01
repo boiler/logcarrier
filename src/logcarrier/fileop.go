@@ -19,11 +19,13 @@ type Buf struct {
 	Key   string
 	Lock  *trylock.Mutex
 	Buf   bufferer.Bufferer
+
+	Counter int
 }
 
 // FileOp suit to work with files (append data to files, logrotate them)
 type FileOp struct {
-	items     map[string]Buf
+	items     map[string]*Buf
 	itemsLock *sync.Mutex
 	factory   func(string, string, string) (bufferer.Bufferer, error) // Generates bufferer for a given key
 
@@ -37,7 +39,7 @@ type FileOp struct {
 //   ticker is used to generate
 func NewFileOp(factory func(string, string, string) (bufferer.Bufferer, error), ticker *time.Ticker) *FileOp {
 	res := &FileOp{
-		items:       make(map[string]Buf),
+		items:       make(map[string]*Buf),
 		itemsLock:   &sync.Mutex{},
 		factory:     factory,
 		ticker:      ticker,
@@ -53,7 +55,7 @@ func fileKey(dir, name, group string) string {
 }
 
 // GetFile retrieves Buf
-func (f *FileOp) GetFile(dir, name, group string) (res Buf, err error) {
+func (f *FileOp) GetFile(dir, name, group string) (res *Buf, err error) {
 	f.itemsLock.Lock()
 	key := fileKey(dir, name, group)
 	buf, ok := f.items[key]
@@ -63,7 +65,7 @@ func (f *FileOp) GetFile(dir, name, group string) (res Buf, err error) {
 			f.itemsLock.Unlock()
 			return res, err
 		}
-		buf = Buf{
+		buf = &Buf{
 			Dir:   dir,
 			Name:  name,
 			Group: group,
@@ -110,7 +112,7 @@ func (f *FileOp) FlushPeriodic() {
 		f.wg.Add(1)
 		logging.Info("FLUSHER: started")
 
-		buf := make([]Buf, 4096)
+		buf := make([]*Buf, 4096)
 
 		for {
 			select {
@@ -140,13 +142,15 @@ func (f *FileOp) FlushPeriodic() {
 						flushed++
 					}
 					v.Lock.Unlock()
+					v.Counter--
+					if v.Counter == 0 {
+						f.itemsLock.Lock()
+						delete(f.items, v.Key)
+						f.itemsLock.Unlock()
+					}
 				}
 				logging.Info(
-					`FLUSHER:
-flushed: %d
-were locked: %d
-flushes failed: %d
-duration: %s`,
+					`FLUSHER: flushed: %d, were locked: %d, flushes failed: %d, duration: %s`,
 					flushed, wereLocked, flushErrors, time.Now().Sub(t))
 			case <-f.stopChannel:
 				logging.Info("FLUSHER: was ordered to stop flushing, closing buffers")
@@ -171,7 +175,7 @@ func (f *FileOp) LogrotatePeriodic(periodic chan int) {
 	go func() {
 		f.wg.Add(1)
 		logging.Info("LOGROTATER: periodic rotater started")
-		buf := make([]Buf, 4096)
+		buf := make([]*Buf, 4096)
 		for {
 			select {
 			case <-periodic:
@@ -183,11 +187,9 @@ func (f *FileOp) LogrotatePeriodic(periodic chan int) {
 				f.itemsLock.Unlock()
 				logging.Info("LOGROTATER: periodic rotation of %d items", len(buf))
 				for _, v := range buf {
-					v.Lock.Lock()
-					if err := v.Buf.Logrotate(v.Dir, v.Name, v.Group); err != nil {
-						logging.Error("LOGROTATER: failed to lograter %s/%s - %s", v.Dir, v.Name, err)
+					if err := f.Logrotate(v.Dir, v.Name, v.Group); err != nil {
+						logging.Error("LOGROTATER: error. %s", err)
 					}
-					v.Lock.Unlock()
 				}
 
 			case <-f.stopChannel:

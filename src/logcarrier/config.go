@@ -6,8 +6,9 @@ import (
 	"os"
 	"time"
 
+	cron "gopkg.in/robfig/cron.v2"
+
 	"github.com/BurntSushi/toml"
-	"github.com/robfig/cron"
 )
 
 // Config structure
@@ -128,7 +129,7 @@ func LoadConfig(filePath string) (res Config) {
 
 	// Check schedule format
 	c := cron.New()
-	if err = c.AddFunc(res.Logrotate.Schedule, func() {}); err != nil {
+	if _, err = c.AddFunc(res.Logrotate.Schedule, func() {}); err != nil {
 		err = fmt.Errorf("Malformed schedule `%s`: %s", res.Logrotate.Schedule, err)
 		return
 	}

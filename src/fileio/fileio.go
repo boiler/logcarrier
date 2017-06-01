@@ -9,6 +9,7 @@ import (
 	"binenc"
 	"bytes"
 	"fmt"
+	"logging"
 	"os"
 	"path/filepath"
 	"paths"
@@ -29,8 +30,9 @@ type File struct {
 	name  string
 	group string
 
-	file *os.File
-	time time.Time
+	file       *os.File
+	time       time.Time
+	writeCount int
 }
 
 // Open File constructor
@@ -93,11 +95,15 @@ func (f *File) open() (err error) {
 
 // Write ...
 func (f *File) Write(p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return
+	}
 	if f.file == nil {
 		if err = f.open(); err != nil {
 			return
 		}
 	}
+	f.writeCount++
 	return f.file.Write(p)
 }
 
@@ -113,6 +119,11 @@ func (f *File) Close() error {
 // Logrotate ...
 func (f *File) Logrotate(dir, name, group string) error {
 	rotname := f.namegen.Rotation(dir, name, group, f.time)
+	if f.writeCount == 0 {
+		logging.Info("No data collected in %s, omitting log rotation", rotname)
+		return nil
+	}
+	f.writeCount = 0
 	if f.file != nil {
 		panic(fmt.Errorf("File must be closed before the log rotation `%s`=>`%s`", f.fname, rotname))
 	}

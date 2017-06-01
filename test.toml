@@ -9,13 +9,13 @@ framing="256Kb"
 [files]
 root="/home/emacs/Sources/logcarrier/logs"
 name="/${dir}/${name}.zst"
-rotation="/${dir}/${name}-${ time | %Y%m%d%H }.zst"
+rotation="/${dir}/${name}-${ time | %Y%m%d%H%M }.zst"
 
 [links]
 root="/home/emacs/Sources/logcarrier/logs"
 name="/${dir}/${ time | %Y/%m/%d }/${name}-${time | %Y.%m.%d-%H }.zst"
-rotation="/${dir}/${ time  %Y/%m/%d }/${name}-${ time | %Y.%m.%d-%H }.zst"
+rotation="/${dir}/${ time | %Y/%m/%d }/${name}-${ time | %Y.%m.%d-%H:%M }.zst"
 
 [logrotate]
 method="periodic"
-schedule="@hourly"
+schedule="*/1 * * * *"
