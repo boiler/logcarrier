@@ -30,7 +30,7 @@ flusher_sleep="30s"                # Intervals for force flusher sleep
 
 [files]
 root="/var/logs/logcarrier"                     # Root directory to put logs in
-root_mode=0755                                  # Mode for directories what are creating in process
+root_mode=O755                                  # Mode for directories what are creating in process
 rotation="/${dir}/${name}-${ time | %Y%m%d%H }" # Masks for file name current file moves into after rotation.
                                                 # Available vars:
                                                 #   time:  time
