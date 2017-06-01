@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/robfig/cron"
 )
 
 // Config structure
@@ -55,7 +56,8 @@ type Config struct {
 	} `toml:"links"`
 
 	Logrotate struct {
-		Method LogrotateMethod `toml:"method"`
+		Method   LogrotateMethod `toml:"method"`
+		Schedule string          `toml:"schedule"`
 	} `toml:"logrotate"`
 }
 
@@ -87,6 +89,7 @@ func initConfig(config *Config) {
 	config.Files.Rotation = "${dir}/${name}-${ time | %Y.%m.%d-%H }"
 
 	config.Logrotate.Method = LogrotatePeriodic
+	config.Logrotate.Schedule = "0 */1 * * *"
 }
 
 // LoadConfig loads config from given file
@@ -118,6 +121,13 @@ func LoadConfig(filePath string) (res Config) {
 	}
 	if len(res.Files.Rotation) == 0 {
 		err = fmt.Errorf("files.rotation must not be empty")
+		return
+	}
+
+	// Check schedule format
+	c := cron.New()
+	if err = c.AddFunc(res.Logrotate.Schedule, func() {}); err != nil {
+		err = fmt.Errorf("Malformed schedule `%s`: %s", res.Logrotate.Schedule, err)
 		return
 	}
 

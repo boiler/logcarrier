@@ -15,3 +15,7 @@ rotation="/${dir}/${name}-${ time | %Y%m%d%H }"
 root="/home/emacs/Sources/logcarrier/logs"
 name="/${dir}/${ time | %Y/%m/%d }/${name}-${time | %Y.%m.%d-%H }"
 rotation="/${dir}/${ time  %Y/%m/%d }/${name}-${ time | %Y.%m.%d-%H }"
+
+[logrotate]
+method="periodic"
+schedule="@hourly"

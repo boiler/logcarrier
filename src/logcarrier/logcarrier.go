@@ -99,9 +99,9 @@ func main() {
 	switch cfg.Logrotate.Method {
 	case LogrotatePeriodic:
 		rotatepool.MakePlumb()
-		go fileops.LogrotatePeriodic(periodic.Hourly())
+		go fileops.LogrotatePeriodic(periodic.Schedule(cfg.Logrotate.Schedule))
 	case LogrotateBoth:
-		go fileops.LogrotatePeriodic(periodic.Hourly())
+		go fileops.LogrotatePeriodic(periodic.Schedule(cfg.Logrotate.Schedule))
 	}
 
 	for i := 0; i < cfg.Workers.Router; i++ {
