@@ -13,9 +13,12 @@ import (
 
 // Buf access
 type Buf struct {
-	Name string
-	Lock *trylock.Mutex
-	Buf  bufferer.Bufferer
+	Dir   string
+	Name  string
+	Group string
+	Key   string
+	Lock  *trylock.Mutex
+	Buf   bufferer.Bufferer
 }
 
 // FileOp suit to work with files (append data to files, logrotate them)
@@ -26,6 +29,7 @@ type FileOp struct {
 
 	ticker      *time.Ticker
 	stopChannel chan int
+	wg          *sync.WaitGroup
 }
 
 // NewFileOp generates file service
@@ -38,26 +42,89 @@ func NewFileOp(factory func(string, string, string) (bufferer.Bufferer, error), 
 		factory:     factory,
 		ticker:      ticker,
 		stopChannel: make(chan int),
+		wg:          &sync.WaitGroup{},
 	}
 
+	return res
+}
+
+func fileKey(dir, name, group string) string {
+	return filepath.Clean(filepath.Join(dir, name, group))
+}
+
+// GetFile retrieves Buf
+func (f *FileOp) GetFile(dir, name, group string) (res Buf, err error) {
+	f.itemsLock.Lock()
+	key := fileKey(dir, name, group)
+	buf, ok := f.items[key]
+	if !ok {
+		b, err := f.factory(dir, name, group)
+		if err != nil {
+			f.itemsLock.Unlock()
+			return res, err
+		}
+		buf = Buf{
+			Dir:   dir,
+			Name:  name,
+			Group: group,
+			Key:   key,
+			Lock:  &trylock.Mutex{},
+			Buf:   b,
+		}
+		f.items[key] = buf
+	}
+	f.itemsLock.Unlock()
+	return buf, nil
+}
+
+// Logrotate obviously logrotates file
+func (f *FileOp) Logrotate(dir, name, group string) (err error) {
+	f.itemsLock.Lock()
+	key := fileKey(dir, name, group)
+	buf, ok := f.items[key]
+	f.itemsLock.Unlock()
+	if !ok {
+		return fmt.Errorf("file `%s` not found", name)
+	}
+	buf.Lock.Lock()
+	if err := buf.Buf.Close(); err != nil {
+		goto exit
+	}
+	err = buf.Buf.Logrotate(dir, name, group)
+
+exit:
+	buf.Lock.Unlock()
+	return err
+}
+
+// Join wait for the background worker to stop
+func (f *FileOp) Join() {
+	f.stopChannel <- 0
+	f.stopChannel <- 0
+	f.wg.Wait()
+}
+
+// FlushPeriodic periodically flushes ...
+func (f *FileOp) FlushPeriodic() {
 	go func() {
+		f.wg.Add(1)
 		logging.Info("FLUSHER: started")
 
 		buf := make([]Buf, 4096)
 
 		for {
 			select {
-			case t := <-ticker.C:
+			case t := <-f.ticker.C:
 				flushed := 0
 				flushErrors := 0
 				wereLocked := 0
 
 				buf = buf[:0]
-				res.itemsLock.Lock()
-				for _, v := range res.items {
+				f.itemsLock.Lock()
+				for _, v := range f.items {
 					buf = append(buf, v)
 				}
-				res.itemsLock.Unlock()
+				f.itemsLock.Unlock()
 
 				logging.Info("FLUSHER: flushing %d items", len(buf))
 				for _, v := range buf {
@@ -81,74 +148,52 @@ were locked: %d
 flushes failed: %d
 duration: %s`,
 					flushed, wereLocked, flushErrors, time.Now().Sub(t))
-			case <-res.stopChannel:
+			case <-f.stopChannel:
 				logging.Info("FLUSHER: was ordered to stop flushing, closing buffers")
-				res.itemsLock.Lock()
-				for k, v := range res.items {
+				f.itemsLock.Lock()
+				for k, v := range f.items {
 					if err := v.Buf.Close(); err != nil {
 						logging.Error("Failed to close %s: %s", k, err)
 					} else {
 						logging.Info("Closed %s", k)
 					}
 				}
-				res.itemsLock.Unlock()
-				res.stopChannel <- 0
+				f.itemsLock.Unlock()
+				f.wg.Done()
 				return
 			}
 		}
 	}()
-
-	return res
 }
 
-func fileKey(dir, name, group string) string {
-	return filepath.Clean(filepath.Join(dir, name, group))
-}
+// LogrotatePeriodic periodically logrotates all files under write
+func (f *FileOp) LogrotatePeriodic(periodic chan int) {
+	go func() {
+		f.wg.Add(1)
+		logging.Info("LOGROTATER: periodic rotater started")
+		buf := make([]Buf, 4096)
+		for {
+			select {
+			case <-periodic:
+				buf := buf[:0]
+				f.itemsLock.Lock()
+				for _, v := range f.items {
+					buf = append(buf, v)
+				}
+				f.itemsLock.Unlock()
+				logging.Info("LOGROTATER: periodic rotation of %d items", len(buf))
+				for _, v := range buf {
+					v.Lock.Lock()
+					if err := v.Buf.Logrotate(v.Dir, v.Name, v.Group); err != nil {
+						logging.Error("LOGROTATER: failed to lograter %s/%s - %s", v.Dir, v.Name, err)
+					}
+					v.Lock.Unlock()
+				}
 
-// GetFile retrieves Buf
-func (f *FileOp) GetFile(dir, name, group string) (res Buf, err error) {
-	f.itemsLock.Lock()
-	key := fileKey(dir, name, group)
-	buf, ok := f.items[key]
-	if !ok {
-		b, err := f.factory(dir, name, group)
-		if err != nil {
-			f.itemsLock.Unlock()
-			return res, err
+			case <-f.stopChannel:
+				f.wg.Done()
+				return
+			}
 		}
-		buf = Buf{
-			Name: key,
-			Lock: &trylock.Mutex{},
-			Buf:  b,
-		}
-		f.items[key] = buf
-	}
-	f.itemsLock.Unlock()
-	return buf, nil
-}
-
-// Logrotate obviously logrotates file
-func (f *FileOp) Logrotate(dir, name, group string) (err error) {
-	f.itemsLock.Lock()
-	key := fileKey(dir, name, group)
-	buf, ok := f.items[key]
-	f.itemsLock.Unlock()
-	if !ok {
-		return fmt.Errorf("file `%s` not found", name)
-	}
-	buf.Lock.Lock()
-	if err := buf.Buf.Close(); err != nil {
-		goto exit
-	}
-	err = buf.Buf.Logrotate()
-
-exit:
-	buf.Lock.Unlock()
-	return err
-}
-
-// Join wait for the background worker to stop
-func (f *FileOp) Join() {
-	f.stopChannel <- 0
-	<-f.stopChannel
+	}()
 }

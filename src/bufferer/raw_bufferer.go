@@ -54,8 +54,8 @@ func (b *RawBufferer) Flush() error {
 }
 
 // Logrotate implementation
-func (b *RawBufferer) Logrotate() error {
-	return b.d.Logrotate()
+func (b *RawBufferer) Logrotate(dir, name, group string) error {
+	return b.d.Logrotate(dir, name, group)
 }
 
 // DumpState implementation

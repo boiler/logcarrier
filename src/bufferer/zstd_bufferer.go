@@ -79,8 +79,8 @@ func (b *ZSTDBufferer) Flush() error {
 }
 
 // Logrotate implementation
-func (b *ZSTDBufferer) Logrotate() error {
-	return b.d.Logrotate()
+func (b *ZSTDBufferer) Logrotate(dir, name, group string) error {
+	return b.d.Logrotate(dir, name, group)
 
 }
 

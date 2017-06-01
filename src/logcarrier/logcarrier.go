@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"paths"
+	"periodic"
 	"syscall"
 	"time"
 	"utils"
@@ -87,10 +88,21 @@ func main() {
 
 	// Setting up background services
 	ticker := time.NewTicker(cfg.Workers.FlusherSleep)
+
 	fileops := NewFileOp(factory, ticker)
+	go fileops.FlushPeriodic()
+
 	headerpool := NewHeaderPool(headerjobs, dumpjobs, rotatejobs)
 	dumppool := NewDumpPool(dumpjobs, fileops, cfg.WaitTimeout)
+
 	rotatepool := NewLogrotatePool(rotatejobs, fileops, cfg.WaitTimeout)
+	switch cfg.Logrotate.Method {
+	case LogrotatePeriodic:
+		rotatepool.MakePlumb()
+		go fileops.LogrotatePeriodic(periodic.Hourly())
+	case LogrotateBoth:
+		go fileops.LogrotatePeriodic(periodic.Hourly())
+	}
 
 	for i := 0; i < cfg.Workers.Router; i++ {
 		headerpool.Spawn()

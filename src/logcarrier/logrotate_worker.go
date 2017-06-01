@@ -25,17 +25,25 @@ type LogrotatePool struct {
 	jobsCounter int
 	wg          *sync.WaitGroup
 	stopQueue   chan int
+	method      func(string, string, string) error
 }
 
 // NewLogrotatePool constructor
 func NewLogrotatePool(netjobs chan LogrotateJob, files *FileOp, timeout time.Duration) *LogrotatePool {
-	return &LogrotatePool{
+	res := &LogrotatePool{
 		netjobs:     netjobs,
 		files:       files,
 		jobsCounter: 0,
 		wg:          &sync.WaitGroup{},
 		stopQueue:   make(chan int),
 	}
+	res.method = res.LogrotateReal
+	return res
+}
+
+// MakePlumb replaces logrotating with doing nothing
+func (lr *LogrotatePool) MakePlumb() {
+	lr.method = lr.LogrotatePlumb
 }
 
 // Stop command jobs to stop
@@ -77,4 +85,14 @@ func (lr *LogrotatePool) Spawn() {
 			}
 		}
 	}()
+}
+
+// LogrotateReal performs actual log rotating job for the given file path
+func (lr *LogrotatePool) LogrotateReal(dir, name, group string) error {
+	return lr.files.Logrotate(dir, name, group)
+}
+
+// LogrotatePlumb does nothing
+func (lr *LogrotatePool) LogrotatePlumb(dir, name, group string) error {
+	return nil
 }

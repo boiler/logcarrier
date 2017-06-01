@@ -68,11 +68,20 @@ func (f *File) open() (err error) {
 
 	dirpath, _ = filepath.Split(lname)
 	if err = os.MkdirAll(dirpath, f.dirmode); err != nil {
-		return err
 	}
-	if err = os.Symlink(fname, lname); err != nil {
-		_ = file.Close()
-		return
+	if utils.PathExists(lname) {
+		dest, err := os.Readlink(lname)
+		if err != nil {
+			return fmt.Errorf("File `%s` exists and it is not a link", lname)
+		}
+		if dest != fname {
+			return fmt.Errorf("Link `%s` exists but it does not refer to `%s`", lname, fname)
+		}
+	} else {
+		if err = os.Symlink(fname, lname); err != nil {
+			_ = file.Close()
+			return
+		}
 	}
 
 	f.file = file
@@ -102,8 +111,8 @@ func (f *File) Close() error {
 }
 
 // Logrotate ...
-func (f *File) Logrotate() error {
-	rotname := f.namegen.Rotation(f.dir, f.name, f.group, f.time)
+func (f *File) Logrotate(dir, name, group string) error {
+	rotname := f.namegen.Rotation(dir, name, group, f.time)
 	if f.file != nil {
 		panic(fmt.Errorf("File must be closed before the log rotation `%s`=>`%s`", f.fname, rotname))
 	}
