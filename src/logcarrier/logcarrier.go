@@ -46,7 +46,7 @@ func main() {
 		}
 	}
 
-	fnamegens := paths.NewFiles(cfg.Files.Root, cfg.Files.Rotation)
+	fnamegens := paths.NewFiles(cfg.Files.Root, cfg.Files.Name, cfg.Files.Rotation)
 	var lnamegens paths.Paths
 	if cfg.Links.enabled {
 		lnamegens = paths.NewLinks(cfg.Links.Root, cfg.Links.Name, cfg.Links.Rotation)

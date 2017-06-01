@@ -44,6 +44,7 @@ type Config struct {
 	Files struct {
 		Root     string      `toml:"root"`
 		RootMode os.FileMode `toml:"root_mode"`
+		Name     string      `toml:"name"`
 		Rotation string      `toml:"rotation"`
 	} `toml:"files"`
 
@@ -86,6 +87,7 @@ func initConfig(config *Config) {
 
 	config.Files.Root = "./logs"
 	config.Files.RootMode = 0755
+	config.Files.Name = "${dir}?/${name}"
 	config.Files.Rotation = "${dir}/${name}-${ time | %Y.%m.%d-%H }"
 
 	config.Logrotate.Method = LogrotatePeriodic
