@@ -1,1 +1,4 @@
 logcarrier-storage
+.golang-project
+*.test
+.bin
