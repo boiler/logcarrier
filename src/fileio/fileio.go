@@ -19,8 +19,7 @@ import (
 
 // File object that is steady against rotating.
 type File struct {
-	namegen paths.Paths
-	linkgen paths.Paths
+	namegen *paths.Files
 	dirmode os.FileMode
 
 	fname string
@@ -36,10 +35,9 @@ type File struct {
 }
 
 // Open File constructor
-func Open(dir, name, group string, namegen, linkgen paths.Paths, dirmode os.FileMode) (*File, error) {
+func Open(dir, name, group string, namegen *paths.Files, dirmode os.FileMode) (*File, error) {
 	file := &File{
 		namegen: namegen,
-		linkgen: linkgen,
 		dirmode: dirmode,
 
 		dir:   dir,
@@ -63,7 +61,7 @@ func (f *File) open() (err error) {
 		return
 	}
 
-	lname := f.linkgen.Name(f.dir, f.name, f.group, t)
+	lname := f.namegen.Link(f.dir, f.name, f.group, t)
 	if len(lname) == 0 {
 		return
 	}
@@ -71,15 +69,20 @@ func (f *File) open() (err error) {
 	dirpath, _ = filepath.Split(lname)
 	if err = os.MkdirAll(dirpath, f.dirmode); err != nil {
 	}
+	needALink := true
 	if utils.PathExists(lname) {
 		dest, err := os.Readlink(lname)
 		if err != nil {
 			return fmt.Errorf("File `%s` exists and it is not a link", lname)
 		}
 		if dest != fname {
-			return fmt.Errorf("Link `%s` exists but it does not refer to `%s`(≠`%s`)", lname, fname, dest)
+			if err = os.Remove(lname); err != nil {
+				return fmt.Errorf("Cannot remove outdated link %s => %s (need to rebind it to => %s): %s", lname, dest, fname, err)
+			}
 		}
-	} else {
+		needALink = false
+	}
+	if needALink {
 		if err = os.Symlink(fname, lname); err != nil {
 			_ = file.Close()
 			return
@@ -118,34 +121,13 @@ func (f *File) Close() error {
 
 // Logrotate ...
 func (f *File) Logrotate(dir, name, group string) error {
-	rotname := f.namegen.Rotation(dir, name, group, f.time)
 	if f.writeCount == 0 {
-		logging.Info("No data collected in %s, omitting log rotation", rotname)
+		logging.Info("No data collected in %s, omitting log rotation", f.fname)
 		return nil
 	}
 	f.writeCount = 0
 	if f.file != nil {
-		panic(fmt.Errorf("File must be closed before the log rotation `%s`=>`%s`", f.fname, rotname))
-	}
-	if !utils.PathExists(f.fname) {
-		return fmt.Errorf("Can't rename file %s: file not exists", f.fname)
-	}
-	if utils.PathExists(rotname) {
-		return fmt.Errorf("Can't rename file %s => %s: file exists", f.fname, rotname)
-	}
-	if len(f.link) > 0 {
-		if err := os.Remove(f.link); err != nil {
-			return fmt.Errorf("Can't remove symlink %s => %s: %s", f.link, f.fname, err)
-		}
-	}
-	if err := os.Rename(f.fname, rotname); err != nil {
-		return fmt.Errorf("Can't rename file %s => %s: %s", f.fname, rotname, err)
-	}
-	rotlink := f.linkgen.Rotation(f.dir, f.name, f.group, f.time)
-	if len(rotlink) > 0 {
-		if err := os.Symlink(rotname, rotlink); err != nil {
-			return fmt.Errorf("Can't create symlink %s => %s: %s", rotlink, rotname, err)
-		}
+		panic(fmt.Errorf("File must be closed before the log rotation `%s`", f.fname))
 	}
 	return nil
 }

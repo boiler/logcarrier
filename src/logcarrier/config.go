@@ -46,16 +46,8 @@ type Config struct {
 		Root     string      `toml:"root"`
 		RootMode os.FileMode `toml:"root_mode"`
 		Name     string      `toml:"name"`
-		Rotation string      `toml:"rotation"`
+		Link     string      `toml:"link"`
 	} `toml:"files"`
-
-	Links struct {
-		enabled  bool
-		Root     string      `toml:"root"`
-		RootMode os.FileMode `toml:"root_mode"`
-		Name     string      `toml:"name"`
-		Rotation string      `toml:"rotation"`
-	} `toml:"links"`
 
 	Logrotate struct {
 		Method   LogrotateMethod `toml:"method"`
@@ -88,8 +80,8 @@ func initConfig(config *Config) {
 
 	config.Files.Root = "./logs"
 	config.Files.RootMode = 0755
-	config.Files.Name = "${dir}?/${name}"
-	config.Files.Rotation = "${dir}/${name}-${ time | %Y.%m.%d-%H }"
+	config.Files.Name = "${dir}?/${name}-${ time | %Y.%m.%d-%H%M }"
+	config.Files.Link = "${dir}/${name}"
 
 	config.Logrotate.Method = LogrotatePeriodic
 	config.Logrotate.Schedule = "0 */1 * * *"
@@ -113,18 +105,17 @@ func LoadConfig(filePath string) (res Config) {
 
 		return
 	}
-	lengths := map[string]string{
-		"root":     res.Links.Root,
-		"name":     res.Links.Name,
-		"rotation": res.Links.Rotation,
-	}
 
 	if len(res.Files.Root) == 0 {
 		err = fmt.Errorf("files.root must not be empty")
 		return
 	}
-	if len(res.Files.Rotation) == 0 {
-		err = fmt.Errorf("files.rotation must not be empty")
+	if len(res.Files.Name) == 0 {
+		err = fmt.Errorf("files.name must not be empty")
+		return
+	}
+	if len(res.Files.Link) == 0 {
+		err = fmt.Errorf("files.link must not be empty")
 		return
 	}
 
@@ -135,29 +126,5 @@ func LoadConfig(filePath string) (res Config) {
 		return
 	}
 
-	max := 0
-	maxarg := ""
-	maxv := ""
-	min := len(res.Links.Root)
-	minarg := "root"
-	for k, v := range lengths {
-		if len(v) > max {
-			max = len(v)
-			maxarg = k
-			maxv = v
-		}
-		if len(v) < min {
-			min = len(v)
-			minarg = k
-		}
-	}
-	if min == 0 && max == 0 || (min > 0 && max > 0) {
-		res.Links.enabled = min > 0
-		return
-	}
-	err = fmt.Errorf(
-		"links.* must be either all empty or all full: links.%s is empty and links.%s is not (=%s)",
-		minarg, maxarg, maxv,
-	)
 	return
 }

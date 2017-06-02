@@ -39,20 +39,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: directory %s does not exist\n", cfg.Files.Root)
 		os.Exit(1)
 	}
-	if len(cfg.Links.Root) > 0 {
-		if !utils.PathExists(cfg.Links.Root) {
-			fmt.Fprintf(os.Stderr, "Error: directory %s does not exist\n", cfg.Links.Root)
-			os.Exit(1)
-		}
-	}
 
-	fnamegens := paths.NewFiles(cfg.Files.Root, cfg.Files.Name, cfg.Files.Rotation)
-	var lnamegens paths.Paths
-	if cfg.Links.enabled {
-		lnamegens = paths.NewLinks(cfg.Links.Root, cfg.Links.Name, cfg.Links.Rotation)
-	} else {
-		lnamegens = paths.Void(true)
-	}
+	fnamegens := paths.NewFiles(cfg.Files.Root, cfg.Files.Name, cfg.Files.Link)
 
 	// Setting up prerequisites
 	headerjobs := make(chan HeaderJob, cfg.Buffers.Connections)
@@ -64,7 +52,7 @@ func main() {
 	switch cfg.Compression.Method {
 	case ZStd:
 		factory = func(dir, name, group string) (bufferer.Bufferer, error) {
-			d, err := fileio.Open(dir, name, group, fnamegens, lnamegens, cfg.Files.RootMode)
+			d, err := fileio.Open(dir, name, group, fnamegens, cfg.Files.RootMode)
 			if err != nil {
 				return nil, err
 			}
@@ -77,7 +65,7 @@ func main() {
 		}
 	case Raw:
 		factory = func(dir, name, group string) (bufferer.Bufferer, error) {
-			d, err := fileio.Open(dir, name, group, fnamegens, lnamegens, cfg.Files.RootMode)
+			d, err := fileio.Open(dir, name, group, fnamegens, cfg.Files.RootMode)
 			if err != nil {
 				return nil, err
 			}
