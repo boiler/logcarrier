@@ -17,6 +17,10 @@ import (
 	"utils"
 )
 
+const (
+	tempLinkFuse = "21312321321423dshjcjbhquyergyuXrey91=123"
+)
+
 // File object that is steady against rotating.
 type File struct {
 	namegen *paths.Files
@@ -69,24 +73,24 @@ func (f *File) open() (err error) {
 	dirpath, _ = filepath.Split(lname)
 	if err = os.MkdirAll(dirpath, f.dirmode); err != nil {
 	}
-	needALink := true
 	if utils.PathExists(lname) {
-		dest, err := os.Readlink(lname)
+		_, err := os.Readlink(lname)
 		if err != nil {
 			return fmt.Errorf("File `%s` exists and it is not a link", lname)
 		}
-		if dest != fname {
-			if err = os.Remove(lname); err != nil {
-				return fmt.Errorf("Cannot remove outdated link %s => %s (need to rebind it to => %s): %s", lname, dest, fname, err)
-			}
-		}
-		needALink = false
 	}
-	if needALink {
-		if err = os.Symlink(fname, lname); err != nil {
-			_ = file.Close()
-			return
-		}
+
+	i := 0
+	for i = 0; i < len(fname) && i < len(lname) && fname[i] == lname[i]; i++ {
+	}
+	target := fname[i:]
+	if err = os.Symlink(target, lname+tempLinkFuse); err != nil {
+		_ = file.Close()
+		return
+	}
+	if err = os.Rename(lname+tempLinkFuse, lname); err != nil {
+		_ = file.Close()
+		return
 	}
 
 	f.file = file
@@ -112,6 +116,9 @@ func (f *File) Write(p []byte) (n int, err error) {
 
 // Close ...
 func (f *File) Close() error {
+	if f.file == nil {
+		return nil
+	}
 	if err := f.file.Close(); err != nil {
 		return err
 	}
