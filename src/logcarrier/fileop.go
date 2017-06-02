@@ -19,8 +19,6 @@ type Buf struct {
 	Key   string
 	Lock  *trylock.Mutex
 	Buf   bufferer.Bufferer
-
-	Counter int
 }
 
 // FileOp suit to work with files (append data to files, logrotate them)
@@ -142,12 +140,6 @@ func (f *FileOp) FlushPeriodic() {
 						flushed++
 					}
 					v.Lock.Unlock()
-					v.Counter--
-					if v.Counter == 0 {
-						f.itemsLock.Lock()
-						delete(f.items, v.Key)
-						f.itemsLock.Unlock()
-					}
 				}
 				logging.Info(
 					`FLUSHER: flushed: %d, were locked: %d, flushes failed: %d, duration: %s`,

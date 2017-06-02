@@ -77,7 +77,7 @@ func (f *File) open() (err error) {
 			return fmt.Errorf("File `%s` exists and it is not a link", lname)
 		}
 		if dest != fname {
-			return fmt.Errorf("Link `%s` exists but it does not refer to `%s`", lname, fname)
+			return fmt.Errorf("Link `%s` exists but it does not refer to `%s`(≠`%s`)", lname, fname, dest)
 		}
 	} else {
 		if err = os.Symlink(fname, lname); err != nil {

@@ -109,7 +109,6 @@ func (dp *DumpPool) dump(x DumpJob, w *worker, e *binenc.Encoder, d *bindec.Deco
 	dest := dp.pool.Get().(*bytes.Buffer)
 	dest.Reset()
 	buf.Buf.DumpState(e, dest)
-	buf.Counter = 3
 	err = dp.communicate(x, w, buf.Buf)
 	if err != nil {
 		d.SetSource(dest.Bytes())
