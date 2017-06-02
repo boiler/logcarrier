@@ -87,15 +87,15 @@ func main() {
 	}
 
 	// Setting up background services
-	ticker := time.NewTicker(cfg.Workers.FlusherSleep)
+	ticker := time.NewTicker(time.Duration(cfg.Workers.FlusherSleep))
 
 	fileops := NewFileOp(factory, ticker)
 	go fileops.FlushPeriodic()
 
 	headerpool := NewHeaderPool(headerjobs, dumpjobs, rotatejobs)
-	dumppool := NewDumpPool(dumpjobs, fileops, cfg.WaitTimeout)
+	dumppool := NewDumpPool(dumpjobs, fileops, time.Duration(cfg.WaitTimeout))
 
-	rotatepool := NewLogrotatePool(rotatejobs, fileops, cfg.WaitTimeout)
+	rotatepool := NewLogrotatePool(rotatejobs, fileops, time.Duration(cfg.WaitTimeout))
 	switch cfg.Logrotate.Method {
 	case LogrotatePeriodic:
 		rotatepool.MakePlumb()

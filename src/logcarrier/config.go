@@ -13,11 +13,11 @@ import (
 
 // Config structure
 type Config struct {
-	Listen      string        `toml:"listen"`
-	ListenDebug string        `toml:"listen_debug"`
-	WaitTimeout time.Duration `toml:"wait_timeout"`
-	Key         string        `toml:"key"`
-	LogFile     string        `toml:"logfile"`
+	Listen      string   `toml:"listen"`
+	ListenDebug string   `toml:"listen_debug"`
+	WaitTimeout Duration `toml:"wait_timeout"`
+	Key         string   `toml:"key"`
+	LogFile     string   `toml:"logfile"`
 
 	Compression struct {
 		Method CompressionMethod `toml:"method"`
@@ -39,7 +39,7 @@ type Config struct {
 		Dumper     int `toml:"dumper"`
 		Logrotater int `toml:"logrotater"`
 
-		FlusherSleep time.Duration `toml:"flusher_sleep"`
+		FlusherSleep Duration `toml:"flusher_sleep"`
 	} `toml:"workers"`
 
 	Files struct {
@@ -67,7 +67,7 @@ type Config struct {
 func initConfig(config *Config) {
 	config.Listen = "0.0.0.0:1466"
 	config.ListenDebug = ""
-	config.WaitTimeout = 60 * time.Second
+	config.WaitTimeout = Duration(60 * time.Second)
 	config.Key = "key"
 	config.LogFile = ""
 
@@ -84,7 +84,7 @@ func initConfig(config *Config) {
 	config.Workers.Router = 1024
 	config.Workers.Dumper = 24
 	config.Workers.Logrotater = 48
-	config.Workers.FlusherSleep = time.Second * 30
+	config.Workers.FlusherSleep = Duration(time.Second * 30)
 
 	config.Files.Root = "./logs"
 	config.Files.RootMode = 0755
@@ -110,6 +110,7 @@ func LoadConfig(filePath string) (res Config) {
 		return
 	}
 	if err = toml.Unmarshal(data, &res); err != nil {
+
 		return
 	}
 	lengths := map[string]string{
