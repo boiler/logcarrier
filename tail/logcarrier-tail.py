@@ -39,6 +39,7 @@ conf = {
   'dirname_prefix': '',
   'logfile': '/var/log/logcarrier-tail.log',
   'loglevel': 'DEBUG',
+  'log_line_maxsize': 1024,
   'inc_timeout_multipler' : 2,
   'inc_timeout_min' : 1,
   'inc_timeout_max' : 120,
@@ -335,6 +336,8 @@ def do_tail():
                           while lp < len(line):
                             lp += s.send(line[lp:])
                         except Exception, e:
+                          if len(line) > conf['log_line_maxsize']:
+                            line = line[:conf['log_line_maxsize']]
                           logging.exception("Send line exception: %s\n%s", e, line)
                           line = None
                           lines_num = -1
