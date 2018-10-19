@@ -103,12 +103,11 @@ def handler(signum, frame):
 def save_pos():
   posfile = conf['position_file']
   tmpposfile = vars['tmp_position_file']
-  posfd = open(tmpposfile, 'w')
-  for k in sorted(files.iterkeys()):
-    if 'pos' in files[k]:
-      line = "%s\t%d\n" % (k, files[k]['pos'])
-      posfd.write(line)
-  posfd.close()
+  with open(tmpposfile, 'w') as posfd:
+    for k in sorted(files.iterkeys()):
+      if 'pos' in files[k]:
+        line = "%s\t%d\t%d\n" % (k, files[k]['pos'], os.fstat(files[k]['fd'].fileno()).st_size)
+        posfd.write(line)
   os.rename(tmpposfile, posfile)
 
 def get_line(filename):
@@ -185,7 +184,6 @@ def do_tail():
             line = get_line(filename)
             time_start = datetime.datetime.now()
             try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 files[filename]['fd'].seek(0,2) # to end
                 endpos = files[filename]['fd'].tell()
@@ -455,7 +453,7 @@ def main():
   global vars
   global poss
 
-  vars['tmp_position_file'] = os.path.dirname(conf['position_file'])+'/.'+os.path.basename(conf['position_file'])+'.tmp'
+  vars['tmp_position_file'] = os.path.join(os.path.dirname(conf['position_file']), '.'+os.path.basename(conf['position_file'])+'.tmp')
 
   signal.signal(signal.SIGTERM, handler)
 
