@@ -395,7 +395,7 @@ def do_tail():
                     files[filename]['rotated'] = time.time()
                   elif files[filename]['pos'] > fstat.st_size:
                     logger.debug("File %s size lower than position (truncated)" % filename)
-                    files[filename]['rotated'] = time.time()
+                    files[filename]['pos'] = 0
                 if 'max_mtime_age' in files[filename] and files[filename]['max_mtime_age']:
                   if int(fstat.st_mtime) + files[filename]['max_mtime_age'] < time.time():
                     close_file(filename)
@@ -404,6 +404,7 @@ def do_tail():
                 if conf['rotated_timeout_max'] and files[filename]['rotated'] + conf['rotated_timeout_max'] < time.time():
                   logger.error("File %s rotated_timeout exceeded (%s)" % (filename, conf['rotated_timeout_max']))
                   close_file(filename)
+                  files[filename].pop('rotated',None)
                 else:
                   if bytes_num == 0:
                     fsize = 0
