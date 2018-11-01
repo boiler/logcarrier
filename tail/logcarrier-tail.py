@@ -106,7 +106,12 @@ def save_pos():
   with open(tmpposfile, 'w') as posfd:
     for k in sorted(files.iterkeys()):
       if 'pos' in files[k]:
-        line = "%s\t%d\t%d\n" % (k, files[k]['pos'], os.fstat(files[k]['fd'].fileno()).st_size)
+        fsize = files[k]['pos']
+        try:
+            fsize = os.fstat(files[k]['fd'].fileno()).st_size
+        except:
+            pass
+        line = "%s\t%d\t%d\n" % (k, files[k]['pos'], fsize)
         posfd.write(line)
   os.rename(tmpposfile, posfile)
 
@@ -123,7 +128,7 @@ def close_file(filename):
   poss[filename] = 0
   files[filename]['pos'] = 0
   files[filename]['fd'].close()
-  files[filename]['fd'] = False
+  files[filename]['fd'] = None
   files[filename].pop('ino',None)
 
 def regexp_fmt(src_str, regexp, mask):
