@@ -465,16 +465,23 @@ def main():
 
   logger.debug("position_file: " + conf['position_file'])
 
-  if os.path.isfile(conf['position_file']):
+  if not os.path.isfile(conf['position_file']):
     try:
-      fd = open(conf['position_file'], 'r')
-      for line in fd.readlines():
-        m = re.match('^(\S+)\s+(\d+)', line)
-        if m:
-          poss[m.group(1)] = int(m.group(2))
-      fd.close()
+      save_pos()
     except Exception, e:
-      logger.exception("Unhandled exception: %s", e)
+      logger.exception("create position_file failed: %s", e)
+      raise
+
+  try:
+    fd = open(conf['position_file'], 'r')
+    for line in fd.readlines():
+      m = re.match('^(\S+)\s+(\d+)', line)
+      if m:
+        poss[m.group(1)] = int(m.group(2))
+    fd.close()
+  except Exception, e:
+    logger.exception("read position_file failed: %s", e)
+    raise
 
   do_tail()
 
