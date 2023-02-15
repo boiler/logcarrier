@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 import logging
 import logging.handlers
@@ -104,7 +104,7 @@ def save_pos():
   posfile = conf['position_file']
   tmpposfile = vars['tmp_position_file']
   with open(tmpposfile, 'w') as posfd:
-    for k in sorted(files.iterkeys()):
+    for k in sorted(files.keys()):
       if 'pos' in files[k]:
         fsize = files[k]['pos']
         try:
@@ -118,8 +118,8 @@ def save_pos():
 def get_line(filename):
   p = files[filename]['fd'].tell()
   l = files[filename]['fd'].readline()
-  if not l.endswith("\n"):
-    l = ""
+  if not l.endswith(b"\n"):
+    l = b""
     files[filename]['fd'].seek(p)
   return l
 
@@ -155,10 +155,13 @@ def do_tail():
         for filename in glob.glob(filemask):
           if filename not in files:
             files[filename] = {'group': group}
-            for a in ['host','port','key','protocol','sync_log_rotate','from_begin','from_begin_maxsize','dirname_prefix']:
-              files[filename][a] = conf[a]
+            confkeys = ['host','port','key','protocol','sync_log_rotate','from_begin','from_begin_maxsize','dirname_prefix']
+            confkeys += ['dirname','subdirname','aggregate','filename','file_prefix','file_suffix','filename_match','filename_fmt','dirname_fmt','skip_line_regexp','only_line_regexp','max_mtime_age']
+            for a in confkeys:
+              if a in conf.keys():
+                files[filename][a] = conf[a]
             if group in conf['group_defs']:
-              for a in ['host','port','key','protocol','dirname','subdirname','dirname_prefix','aggregate','filename','file_prefix','file_suffix','filename_match','filename_fmt','dirname_fmt','sync_log_rotate','skip_line_regexp','only_line_regexp','max_mtime_age']:
+              for a in confkeys:
                 if a in conf['group_defs'][group]:
                   files[filename][a] = conf['group_defs'][group][a]
             if '///' in filemask:
@@ -209,8 +212,9 @@ def do_tail():
                       logger.debug('Connected to %s:%s' % (storage_host, storage_port))
                       inc_timeout_conn = conf['inc_timeout_min']
                       if conf['proxy']:
-                        s.send("CONNECT %s:%s HTTP/1.0\n\n" % (storage_host, storage_port))
-                        r = s.recv(1024)
+                        headline = "CONNECT %s:%s HTTP/1.0\n\n" % (storage_host, storage_port)
+                        s.send(headline.encode("utf-8"))
+                        r = s.recv(1024).decode("utf-8")
                         m = re.match("HTTP\/1\.\d (\d\d\d) (.*)",r)
                         if m:
                           hc = m.group(1)
@@ -252,7 +256,8 @@ def do_tail():
                         if 'rotated' in files[filename] and files[filename]['rotated'] and files[filename]['pos']==0:
                             files[filename].pop('rotated',None)
                             if 'sync_log_rotate' in files[filename] and files[filename]['sync_log_rotate']:
-                                s.send("ROTATE %s %s %s %s\n" % ( files[filename]['key'], group, dirname, logname ))
+                                headline = "ROTATE %s %s %s %s\n" % ( files[filename]['key'], group, dirname, logname )
+                                s.send(headline.encode("utf-8"))
                                 if r[:1]=='2':
                                     logger.info("File %s rotated on storage" % logname)
                                 else:
@@ -262,19 +267,20 @@ def do_tail():
                             headline = "DATA %s %s %s %s" % ( files[filename]['key'], group, dirname, logname )
                             if protocol == 2:
                               headline += " %s" % bcnt
-                            s.send(headline + "\n")
-                            r = s.recv(1024)
+                            headline += "\n"
+                            s.send(headline.encode("utf-8"))
+                            r = s.recv(1024).decode("utf-8")
                             while r[:3]=='300':
                               s.settimeout(conf['wait_timeout'])
                               logger.debug('Waiting for lock on %s' % filename)
-                              r = s.recv(1024)
+                              r = s.recv(1024).decode("utf-8")
                             if r[:1]!='2':
-                              logger.debug('Storages not ready')
+                              logger.debug('Storages not ready: %s' % r)
                               inc_timeout_ready = do_inc_timeout(inc_timeout_ready)
                               break
                             else:
                               inc_timeout_ready = conf['inc_timeout_min']
-                      except Exception, e:
+                      except Exception as e:
                         logger.exception("Unhandled exception: %s", e)
 
                 if protocol == 2:
@@ -290,8 +296,8 @@ def do_tail():
                             lp += s.send(chunk[lp:])
                           brem -= blen
                           bytes_num += blen
-                        except:
-                          logging.error("Send error on file %s:" % filename)
+                        except Exception as e:
+                          logger.exception("Send error on file %s:" % filename, e)
                           s = None
                           bytes_num = -1
                           break
@@ -311,7 +317,7 @@ def do_tail():
                         else:
                           regexps.append(files[filename]['only_line_regexp'])
                         for r in regexps:
-                          if re.match(r, line):
+                          if re.match(r, line.decode("utf-8")):
                             skip = False
                             break
                       if 'skip_line_regexp' in files[filename] and files[filename]['skip_line_regexp']:
@@ -322,7 +328,7 @@ def do_tail():
                         else:
                           regexps.append(files[filename]['skip_line_regexp'])
                         for r in regexps:
-                          if re.match(r, line):
+                          if re.match(r, line.decode("utf-8")):
                             skip = True
                             break
                       if skip:
@@ -330,15 +336,15 @@ def do_tail():
                         line = get_line(filename)
                         continue
                       if 'aggregate' in files[filename] and files[filename]['aggregate']:
-                        line = hostname + " " + line
-                      if line[:1]=='.' and re.match("^\.+\r?\n$", line):
-                        line = '.'+line
+                        line = hostname.encode("utf-8") + " " + line
+                      if line[:1]==b'.' and re.match("^\.+\r?\n$", line.decode("utf-8")):
+                        line = b'.'+line
                       if s:
                         try:
                           lp = s.send(line)
                           while lp < len(line):
                             lp += s.send(line[lp:])
-                        except Exception, e:
+                        except Exception as e:
                           if len(line) > conf['log_line_maxsize']:
                             line = line[:conf['log_line_maxsize']]
                           logging.exception("Send line exception: %s\n%s", e, line)
@@ -359,8 +365,8 @@ def do_tail():
 
                 if bytes_num > 0 and not breakall:
                     if protocol==1:
-                        s.send(".\n")
-                    r = s.recv(1024)
+                        s.send(b".\n")
+                    r = s.recv(1024).decode("utf-8")
                     if r[:1]=='2':
                         time_end = datetime.datetime.now()
                         time_sent = time_end - time_start
@@ -377,9 +383,9 @@ def do_tail():
                             save_pos()
                 if s:
                     s.close()
-            except socket.error, ex:
+            except socket.error as e:
               try:
-                logger.error("Error: %s : %s %s", filename, ex.errno, str(ex))
+                logger.error("Error: %s : %s %s", filename, e.errno, str(e))
               except:
                 logger.exception("Error: unknown error")
 
@@ -439,7 +445,7 @@ def do_tail():
                 if int(fstat.st_mtime) + files[filename]['max_mtime_age'] < time.time():
                   continue
               logger.info('Opening file: %s' % filename)
-              files[filename]['fd'] = open(filename, 'r')
+              files[filename]['fd'] = open(filename, 'rb')
               if filename in poss and poss[filename] <= fstat.st_size:
                 files[filename]['pos'] = poss[filename]
                 logger.info('Prepare to read file %s from saved position %s' % (filename, files[filename]['pos']))
@@ -468,7 +474,7 @@ def main():
   if not os.path.isfile(conf['position_file']):
     try:
       save_pos()
-    except Exception, e:
+    except Exception as e:
       logger.exception("create position_file failed: %s", e)
       raise
 
@@ -479,7 +485,7 @@ def main():
       if m:
         poss[m.group(1)] = int(m.group(2))
     fd.close()
-  except Exception, e:
+  except Exception as e:
     logger.exception("read position_file failed: %s", e)
     raise
 
