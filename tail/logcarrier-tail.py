@@ -336,7 +336,7 @@ def do_tail():
                         line = get_line(filename)
                         continue
                       if 'aggregate' in files[filename] and files[filename]['aggregate']:
-                        line = hostname.encode("utf-8") + " " + line
+                        line = hostname.encode("utf-8") + b" " + line
                       if line[:1]==b'.' and re.match("^\.+\r?\n$", line.decode("utf-8")):
                         line = b'.'+line
                       if s:
