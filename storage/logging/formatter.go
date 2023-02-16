@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -29,7 +29,7 @@ var (
 
 func init() {
 	baseTimestamp = time.Now()
-	isTerminal = logrus.IsTerminal()
+	isTerminal = logrus.IsTerminal(os.Stdout)
 }
 
 // This is to not silently overwrite `time`, `msg` and `level` fields when

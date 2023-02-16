@@ -18,8 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	"./config"
-	"./logging"
+	"logcarrier-storage/config"
+	"logcarrier-storage/logging"
 )
 
 import _ "net/http/pprof"
