@@ -214,7 +214,7 @@ def do_tail():
                       if conf['proxy']:
                         headline = "CONNECT %s:%s HTTP/1.0\n\n" % (storage_host, storage_port)
                         s.send(headline.encode("utf-8"))
-                        r = s.recv(1024).decode("utf-8")
+                        r = s.recv(1024).decode()
                         m = re.match("HTTP\/1\.\d (\d\d\d) (.*)",r)
                         if m:
                           hc = m.group(1)
@@ -269,11 +269,11 @@ def do_tail():
                               headline += " %s" % bcnt
                             headline += "\n"
                             s.send(headline.encode("utf-8"))
-                            r = s.recv(1024).decode("utf-8")
+                            r = s.recv(1024).decode()
                             while r[:3]=='300':
                               s.settimeout(conf['wait_timeout'])
                               logger.debug('Waiting for lock on %s' % filename)
-                              r = s.recv(1024).decode("utf-8")
+                              r = s.recv(1024).decode()
                             if r[:1]!='2':
                               logger.debug('Storages not ready: %s' % r)
                               inc_timeout_ready = do_inc_timeout(inc_timeout_ready)
@@ -317,7 +317,7 @@ def do_tail():
                         else:
                           regexps.append(files[filename]['only_line_regexp'])
                         for r in regexps:
-                          if re.match(r, line.decode("utf-8")):
+                          if re.match(r.encode(), line):
                             skip = False
                             break
                       if 'skip_line_regexp' in files[filename] and files[filename]['skip_line_regexp']:
@@ -328,7 +328,7 @@ def do_tail():
                         else:
                           regexps.append(files[filename]['skip_line_regexp'])
                         for r in regexps:
-                          if re.match(r, line.decode("utf-8")):
+                          if re.match(r.encode(), line):
                             skip = True
                             break
                       if skip:
@@ -337,7 +337,7 @@ def do_tail():
                         continue
                       if 'aggregate' in files[filename] and files[filename]['aggregate']:
                         line = hostname.encode("utf-8") + b" " + line
-                      if line[:1]==b'.' and re.match("^\.+\r?\n$", line.decode("utf-8")):
+                      if line[:1]==b'.' and re.match("^\.+\r?\n$".encode(), line):
                         line = b'.'+line
                       if s:
                         try:
